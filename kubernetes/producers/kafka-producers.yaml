@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-producer-cm
+data:
+  API_URL: "https://akabab.github.io/superhero-api/api/id/208.json"
+  TOPIC: "superheroes"
+  BOOTSTRAP_SERVERS: "kafka-g5:9092"
+  POLL_INTERVAL: "10"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer
+  template:
+    metadata:
+      labels:
+        app: kafka-producer
+    spec:
+      containers:
+      - name: producer
+        image: arejula11/kafka-producer:latest   # <- aquí ya sin "superhero"
+        imagePullPolicy: Always
+        env:
+        - name: API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-producer-cm
+              key: API_URL
+        - name: TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-producer-cm
+              key: TOPIC
+        - name: BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-producer-cm
+              key: BOOTSTRAP_SERVERS
+        - name: POLL_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-producer-cm
+              key: POLL_INTERVAL
