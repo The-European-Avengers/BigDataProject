@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: datanode-g5
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+  serviceName: "datanode-g5"
+  replicas: 4
+  selector:
+    matchLabels:
+      app: datanode-g5
+  template:
+    metadata:
+      labels:
+        app: datanode-g5
+    spec:
+      containers:
+        - name: datanode
+          image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          ports:
+            - containerPort: 9864
+          env:
+            - name: SERVICE_PRECONDITION
+              value: "namenode-g5:9870"
+          envFrom:
+            - configMapRef:
+                name: hadoop-config-g5
+          volumeMounts:
+            - name: hadoop-datanode-storage
+              mountPath: /hadoop/dfs/data
+  volumeClaimTemplates:
+    - metadata:
+        name: hadoop-datanode-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: datanode-g5
+spec:
+  selector:
+    app: datanode-g5
+  ports:
+    - name: datanode
+      protocol: TCP
+      port: 9864
+      targetPort: 9864
