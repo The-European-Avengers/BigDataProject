@@ -2523,6 +2523,82 @@
       "originalText": "K8s",
       "autoResize": true,
       "lineHeight": 1.25
+    },
+    {
+      "id": "Oj-fjB_VaeU4yX86vUi3e",
+      "type": "rectangle",
+      "x": 405.3845141405318,
+      "y": 746.2719987892211,
+      "width": 147.01688462027613,
+      "height": 60,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [
+        "8KJh7X-dkrnOsNO9lJHAj"
+      ],
+      "frameId": null,
+      "index": "ax",
+      "roundness": {
+        "type": 3
+      },
+      "seed": 815772391,
+      "version": 1089,
+      "versionNonce": 753740039,
+      "isDeleted": false,
+      "boundElements": [
+        {
+          "id": "XCYuDJEk_XDHVzLFgsiBG",
+          "type": "text"
+        }
+      ],
+      "updated": 1759396830073,
+      "link": null,
+      "locked": false
+    },
+    {
+      "id": "XCYuDJEk_XDHVzLFgsiBG",
+      "type": "text",
+      "x": 431.0130049736191,
+      "y": 763.7719987892211,
+      "width": 95.75990295410156,
+      "height": 25,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 1,
+      "opacity": 100,
+      "groupIds": [
+        "8KJh7X-dkrnOsNO9lJHAj"
+      ],
+      "frameId": null,
+      "index": "ay",
+      "roundness": null,
+      "seed": 2014756359,
+      "version": 1057,
+      "versionNonce": 328232999,
+      "isDeleted": false,
+      "boundElements": [],
+      "updated": 1759396830073,
+      "link": null,
+      "locked": false,
+      "text": "/analytics",
+      "fontSize": 20,
+      "fontFamily": 5,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "Oj-fjB_VaeU4yX86vUi3e",
+      "originalText": "/analytics",
+      "autoResize": true,
+      "lineHeight": 1.25
     }
   ],
   "appState": {
