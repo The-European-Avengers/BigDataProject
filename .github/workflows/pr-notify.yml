@@ -1,16 +1,26 @@
-name: Notify Discord on PR
-
+name: Discord PR notify
 on:
   pull_request:
-    types: [opened, synchronize,  reopened]
+    types: [opened, synchronize, reopened]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send message to Discord
+      - name: Check DISCORD_WEBHOOK presence (safe)
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        uses: Ilshidur/action-discord@master
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK is EMPTY (secret missing)"
+            exit 1
+          else
+            echo "DISCORD_WEBHOOK is SET"
+          fi
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@0.4.0
         with:
-          message: "New PR: ${{ github.event.pull_request.title }} by ${{ github.event.pull_request.user.login }} - ${{ github.event.pull_request.html_url }}"
+          args: "New PR: {{ EVENT_PAYLOAD.pull_request.title }} by {{ EVENT_PAYLOAD.pull_request.user.login }} — {{ EVENT_PAYLOAD.pull_request.html_url }}"
