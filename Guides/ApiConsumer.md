@@ -128,4 +128,3 @@ You should see the messages being printed in the console as they are sent by the
 ![kafka-consumer-logs](./assets/kafka-consume-test.png)
 ## Conclusion
 In this guide we have seen how to create an API consumer that fetches data from an API and sends it to Kafka. We have also seen how to create a Docker image for the API consumer and deploy it to Kubernetes. Finally, we have verified that the data is being sent to Kafka correctly by consuming messages from the Kafka topic. You can now use this setup to fetch data from any API and send it to Kafka for further processing.
-
