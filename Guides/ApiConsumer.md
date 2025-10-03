@@ -31,13 +31,13 @@ The next step is to create a Docker image for the API consumer. We will use the 
 To build the Docker image, navigate to the `kubernetes/producers` directory and run the following command:
 
 ```bash
-docker build -t yourusername/kafka-producer:latest .
+docker build -t arejula11/kafka-producer:latest .
 ```
-Replace `yourusername` with your Docker Hub username.
+Replace `arejula11` with your Docker Hub username.
 Once the image is built, you can push it to Docker Hub using the following command:
 
 ```bash
-docker push yourusername/kafka-producer:latest
+docker push arejula11/kafka-producer:latest
 ```
 In the example appears as `arejula11/kafka-producer:latest`. But if you want to use it, you have to replace `arejula11` with your own Docker Hub username.
 
