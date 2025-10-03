@@ -1,49 +1,95 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kafka-producer-cm
+  name: kafka-producer-cm-1
 data:
   API_URL: "https://akabab.github.io/superhero-api/api/id/208.json"
-  TOPIC: "superheroes"
+  TOPIC: "weather"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
-  POLL_INTERVAL: "10"
+  POLL_INTERVAL: "30"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-producer-cm-2
+data:
+  API_URL: "https://akabab.github.io/superhero-api/api/id/620.json"
+  TOPIC: "price"
+  BOOTSTRAP_SERVERS: "kafka-g5:9092"
+  POLL_INTERVAL: "45"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-producer-cm-3
+data:
+  API_URL: "https://akabab.github.io/superhero-api/api/id/659.json"
+  TOPIC: "consumption"
+  BOOTSTRAP_SERVERS: "kafka-g5:9092"
+  POLL_INTERVAL: "60"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kafka-producer
+  name: kafka-producer-1-g5
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kafka-producer
+      app: kafka-producer-1-g5
   template:
     metadata:
       labels:
-        app: kafka-producer
+        app: kafka-producer-1-g5
     spec:
       containers:
       - name: producer
-        image: arejula11/kafka-producer:latest   # <- aquí ya sin "superhero"
+        image: arejula11/kafka-producer:latest
         imagePullPolicy: Always
-        env:
-        - name: API_URL
-          valueFrom:
-            configMapKeyRef:
-              name: kafka-producer-cm
-              key: API_URL
-        - name: TOPIC
-          valueFrom:
-            configMapKeyRef:
-              name: kafka-producer-cm
-              key: TOPIC
-        - name: BOOTSTRAP_SERVERS
-          valueFrom:
-            configMapKeyRef:
-              name: kafka-producer-cm
-              key: BOOTSTRAP_SERVERS
-        - name: POLL_INTERVAL
-          valueFrom:
-            configMapKeyRef:
-              name: kafka-producer-cm
-              key: POLL_INTERVAL
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-cm-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-2-g5
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-2-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-2-g5
+    spec:
+      containers:
+      - name: producer
+        image: arejula11/kafka-producer:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-cm-2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-3-g5
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-3-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-3-g5
+    spec:
+      containers:
+      - name: producer
+        image: arejula11/kafka-producer:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-cm-3
