@@ -37,9 +37,9 @@ def main():
             try:
                 p.send(TOPIC, data)
                 p.flush()
-                print("Enviado:", data.get("name", ""), " (id:", data.get("id", ""))  
+                print("Sent:", data.get("name", ""), " (id:", data.get("id", ""))  
             except Exception as e:
-                print("Error enviando a Kafka:", e)
+                print("Error sent to Kafka:", e)
         time.sleep(POLL_SECONDS)
 
 if __name__ == "__main__":
