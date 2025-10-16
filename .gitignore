@@ -1,2 +1,6 @@
 **/.idea/
-**/.venv/
+**/.venv/dmi/datasets/private_heating_consumption_2022-2025_combined.csv
+dmi/datasets/private_heating_consumption_2022_separated.csv
+dmi/datasets/private_heating_consumption_2023_separated.csv
+dmi/datasets/private_heating_consumption_2024_separated.csv
+dmi/datasets/private_heating_consumption_2025_separated.csv
