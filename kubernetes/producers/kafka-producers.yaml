@@ -5,9 +5,9 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "wind-speed-10m"
-  TOPIC: "weather-wind4"
+  TOPIC: "weather-wind"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
-  POLL_INTERVAL: "120"
+  POLL_INTERVAL: "10800"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 ---
 apiVersion: v1
@@ -17,9 +17,9 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "temperature-2m"
-  TOPIC: "weather-temp4"
+  TOPIC: "weather-temp"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
-  POLL_INTERVAL: "120"
+  POLL_INTERVAL: "10800"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 ---
 apiVersion: v1
@@ -29,9 +29,9 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "direct-solar-exposure"
-  TOPIC: "weather-sun4"
+  TOPIC: "weather-sun"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
-  POLL_INTERVAL: "120"
+  POLL_INTERVAL: "10800"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 
 ---
@@ -51,11 +51,13 @@ spec:
     spec:
       containers:
       - name: producer
-        image: arejula11/kafka-producer:latest
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
         imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: kafka-producer-wind
+      imagePullSecrets:
+        - name: gitlab-registry
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -73,11 +75,13 @@ spec:
     spec:
       containers:
       - name: producer
-        image: arejula11/kafka-producer:latest
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
         imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: kafka-producer-temp
+      imagePullSecrets:
+        - name: gitlab-registry
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -95,8 +99,11 @@ spec:
     spec:
       containers:
       - name: producer
-        image: arejula11/kafka-producer:latest
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
         imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: kafka-producer-sun
+      imagePullSecrets:
+        - name: gitlab-registry
+      

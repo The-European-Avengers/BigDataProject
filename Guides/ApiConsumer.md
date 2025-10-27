@@ -31,25 +31,36 @@ Finally, we enter an infinite loop where we fetch data from the API. Then, we se
 
 ## Step 2: Create the Docker image
 
-The next step is to create a Docker image for the API consumer. We will use the [Dockerfile](/kubernetes/producers/Dockerfile) located in the `kubernetes/producers` directory. This Dockerfile uses the official Python 3.11 image as the base image. It sets the working directory to `/app`, copies the `requirements.txt` file to the container, and installs the required Python libraries using `pip`. Then it copies the `producer-kafka.py` file to the container, sets the `PYTHONUNBUFFERED` environment variable to `1` to ensure that the output is not buffered, and finally sets the command to run the `producer-kafka.py` script.
+The next step is to create a Docker image for the API consumer. We use the [Dockerfile](/kubernetes/producers/Dockerfile) located in the `kubernetes/producers` directory. This Dockerfile uses the official Python 3.11 image as the base image. It sets the working directory to `/app`, copies the `requirements.txt` file to the container, and installs the required Python libraries using `pip`. Then it copies the `producer-kafka.py` file to the container, sets the `PYTHONUNBUFFERED` environment variable to `1` to ensure that output is not buffered, and finally sets the command to run the `producer-kafka.py` script.
 
+The image is built and pushed to the **GitLab Container Registry** associated with the team project. Before Kubernetes can pull the image, a **personal access token (PAT)** with the `read_registry` scope must be created in GitLab. This token will be used to authenticate your cluster against the private registry.
 
-To build the Docker image, navigate to the `kubernetes/producers` directory and run the following command:
+To build the Docker image, navigate to the `kubernetes/producers` directory and run:
+
 ```bash
 cd kubernetes/producers
+docker build -t registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest .
 ```
+
+Once the image is built, push it to the GitLab registry:
 
 ```bash
-docker build -t arejula11/kafka-producer:latest .
+docker push registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
 ```
-Replace `arejula11` with your Docker Hub username.
 
-Once the image is built, you can push it to Docker Hub using the following command:
+> **Note:** Kubernetes will not be able to pull the image unless the **personal access token** is configured in a secret (`imagePullSecret`) so that the cluster can authenticate with GitLab’s private registry. You can create the secret with:
+>
+> ```bash
+> kubectl create secret docker-registry gitlab-registry \
+>   --docker-server=registry.gitlab.sdu.dk \
+>   --docker-username=<token-username> \
+>   --docker-password=<token> \
+>   --docker-email=<your-email>
+> ```
+>
+> Replace `<token-username>` with your GitLab username (associated with the personal access token), `<token>` with the personal access token you created, and `<your-email>` with your email address. Make sure the secret name (`gitlab-registry`) matches the `imagePullSecrets` section in your Kubernetes deployment.
 
-```bash
-docker push arejula11/kafka-producer:latest
-```
-In the example appears as `arejula11/kafka-producer:latest`. But if you want to use it, you have to replace `arejula11` with your own Docker Hub username.
+
 
 ## Step 3: Deploy the API consumer to Kubernetes
 
@@ -67,7 +78,7 @@ We will use the [kafka-producers.yaml](/kubernetes/producers/kafka-producers.yam
 
 * **Deployments** define:
   * The number of replicas (default is 1 per deployment).
-  * The container image to use (`arejula11/kafka-producer:latest`—replace `arejula11` with your Docker Hub username).
+  * The container image to use (the Docker image we created earlier `registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest`).
   * The environment variables to load from the corresponding ConfigMap.
 
 You can add additional API consumers by creating new ConfigMaps and Deployments following this pattern.  
@@ -126,15 +137,15 @@ You should see the list of topics:
 
 ```bash
 __consumer_offsets
-consumption
-price
-weather
+weather-temp
+weather-wind
+weather-sun
 ```
 
 Now, you can use the Kafka console consumer to consume messages from the `weather` topic. Run the following command:
 
 ```bash
-kafka-console-consumer.sh --bootstrap-server kafka-g5:9092 --topic weather --from-beginning
+kafka-console-consumer.sh --bootstrap-server kafka-g5:9092 --topic weather-temp --from-beginning
 ```
 
 You should see the messages being printed in the console as they are sent by the API consumer. This indicates that the data is being sent to Kafka correctly and is available for consumption. Furthermore, every each ten seconds you should see a new message being printed, as the API consumer is fetching data from the API. The messages should look like this:
