@@ -9,5 +9,6 @@ shapely
 fiona
 pyproj
 rtree
+fastavro
 
 pytz

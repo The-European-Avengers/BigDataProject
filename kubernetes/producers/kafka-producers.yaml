@@ -5,7 +5,7 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "wind-speed-10m"
-  TOPIC: "weather-wind"
+  TOPIC: "weather-wind4"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
   POLL_INTERVAL: "120"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
@@ -17,7 +17,7 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "temperature-2m"
-  TOPIC: "weather-temp"
+  TOPIC: "weather-temp4"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
   POLL_INTERVAL: "120"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
@@ -29,7 +29,7 @@ metadata:
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "direct-solar-exposure"
-  TOPIC: "weather-sun"
+  TOPIC: "weather-sun4"
   BOOTSTRAP_SERVERS: "kafka-g5:9092"
   POLL_INTERVAL: "120"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
