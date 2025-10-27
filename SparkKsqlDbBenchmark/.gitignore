@@ -1,0 +1,40 @@
+# Combined Ignore List
+
+# Scala / SBT / IDE
+target/
+project/target/
+project/project/
+.bsp/
+.idea/
+**/.idea/
+*.class
+*.log
+
+# Python / Virtual Environments
+**/.venv/
+
+# Benchmark results
+benchmark-results/
+*.txt
+
+# Spark
+spark-warehouse/
+derby.log
+metastore_db/
+
+# Kafka / Checkpoints
+/tmp/
+checkpoints/
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log

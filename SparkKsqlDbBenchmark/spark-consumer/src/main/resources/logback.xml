@@ -1,0 +1,25 @@
+<configuration>
+    <!-- Console appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Root logger set to ERROR -->
+    <root level="ERROR">
+        <appender-ref ref="STDOUT" />
+    </root>
+
+    <!-- Suppress all the noisy libraries -->
+    <logger name="org.apache.spark" level="ERROR"/>
+    <logger name="org.apache.kafka" level="ERROR"/>
+    <logger name="org.apache.hadoop" level="ERROR"/>
+    <logger name="org.sparkproject.jetty" level="ERROR"/>
+    <logger name="io.netty" level="ERROR"/>
+    <logger name="org.apache.spark.sql.kafka010" level="ERROR"/>
+    <logger name="org.apache.spark.sql.execution.streaming" level="ERROR"/>
+
+    <!-- Keep your application logs at INFO -->
+    <logger name="ua.playground.benchmark" level="INFO"/>
+</configuration>
