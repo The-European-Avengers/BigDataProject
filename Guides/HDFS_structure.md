@@ -153,3 +153,5 @@ drwxr-xr-x   - root supergroup          0 2025-11-04 15:19 /historical/2022/12
 | `/historical` | Stores historical weather, energy consumption, and pricing data, organized by year and month (`/historical/YYYY/MM`) |
 | `/live`       | Contains streaming weather data (temperature, wind speed, solar energy)                                              |
 | `/analytics`  | Stores processed and aggregated data for analysis and reporting                                                      |
+
+![diagram](./assets/HDFS_strucutre_diagram.png)
