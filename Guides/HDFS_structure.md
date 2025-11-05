@@ -77,18 +77,18 @@ drwxr-xr-x   - root supergroup          0 /raw
 ```
 
 
-## Step 4. Creating Yearly and Monthly Subdirectories in `/historical`
+## Step 4. Creating Yearly and Topic Subdirectories in `/historical`
 
-To organize historical data by year and month, create a nested folder structure under `/historical` directly from the NameNode pod.
+To organize historical data by **year** and **topic**, create a nested folder structure under `/historical` directly from the NameNode pod.
 
 ### Create the Folder Structure
 
-Run the following script **directly in the terminal** to create one folder per year (2020–2024) and one subfolder per month (`01`–`12`) inside each year:
+Run the following script **directly in the terminal** to create one folder per year (2020–2024) and one subfolder per topic (`weather-wind`, `weather-temp`, `weather-sun`) inside each year:
 
 ```bash
 for year in {2020..2024}; do
-  for month in {01..12}; do
-    hdfs dfs -mkdir -p /historical/$year/$month
+  for topic in weather-wind weather-temp weather-sun; do
+    hdfs dfs -mkdir -p /historical/$year/$topic
   done
 done
 ```
@@ -96,10 +96,13 @@ done
 This command will create a structure similar to:
 
 ```
-/historical/2020/01
-/historical/2020/02
+/historical/2020/weather-wind
+/historical/2020/weather-temp
+/historical/2020/weather-sun
 ...
-/historical/2024/12
+/historical/2024/weather-wind
+/historical/2024/weather-temp
+/historical/2024/weather-sun
 ```
 
 ### Verify the Result
@@ -121,7 +124,7 @@ drwxr-xr-x   - root supergroup          0 /historical/2023
 drwxr-xr-x   - root supergroup          0 /historical/2024
 ```
 
-To confirm the monthly folders, list a specific year:
+To confirm the topic folders inside a year:
 
 ```bash
 hdfs dfs -ls /historical/2022
@@ -130,28 +133,80 @@ hdfs dfs -ls /historical/2022
 Expected output:
 
 ```
-Found 12 items
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/01
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/02
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/03
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/04
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/05
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/06
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/07
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:18 /historical/2022/08
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:19 /historical/2022/09
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:19 /historical/2022/10
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:19 /historical/2022/11
-drwxr-xr-x   - root supergroup          0 2025-11-04 15:19 /historical/2022/12
+Found 3 items
+drwxr-xr-x   - root supergroup          0 /historical/2022/weather-sun
+drwxr-xr-x   - root supergroup          0 /historical/2022/weather-temp
+drwxr-xr-x   - root supergroup          0 /historical/2022/weather-wind
+```
+
+Inside each topic folder, there will be 12 `avro` files representing monthly data. The name of each file will specify the month of the data it contains.
+
+## Step 5. Creating Topic Subdirectories in `/live`
+Similarly, create topic subdirectories under the `/live` directory for real-time data:
+
+```bash
+hdfs dfs -mkdir /live/weather-temp
+hdfs dfs -mkdir /live/weather-wind
+hdfs dfs -mkdir /live/weather-sun 
+```
+
+To verify:
+
+```bash
+hdfs dfs -ls /live
+```
+Expected output:
+
+```
+Found 3 items
+drwxr-xr-x   - root supergroup          0 2025-11-05 13:01 /live/weather-sun
+drwxr-xr-x   - root supergroup          0 2025-11-05 13:01 /live/weather-temp
+drwxr-xr-x   - root supergroup          0 2025-11-05 13:01 /live/weather-wind
 ```
 
 ## Final Structure Overview
 
-| Directory     | Purpose                                                                                                              |
-| ------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `/raw`        | Stores raw ingested data (unprocessed weather, energy, or sensor files)                                              |
-| `/historical` | Stores historical weather, energy consumption, and pricing data, organized by year and month (`/historical/YYYY/MM`) |
-| `/live`       | Contains streaming weather data (temperature, wind speed, solar energy)                                              |
-| `/analytics`  | Stores processed and aggregated data for analysis and reporting                                                      |
+| Directory     | Purpose                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| `/raw`        | Stores raw ingested data (unprocessed weather, energy, or sensor files)                   |
+| `/historical` | Stores historical weather data organized by year and topic (`/historical/YYYY/weather-*`) |
+| `/live`       | Contains real-time streaming weather data by topic (temperature, wind speed, solar energy)         |
+| `/analytics`  | Stores processed and aggregated data used for analytics, dashboards, or reporting         |
 
+
+## Example Folder Tree
+
+```text
+/
+├── raw
+├── historical
+│   ├── 2020
+│   │   ├── weather-wind
+│   │   ├── weather-temp
+│   │   └── weather-sun
+│   ├── 2021
+│   │   ├── weather-wind
+│   │   ├── weather-temp
+│   │   └── weather-sun
+│   ├── 2022
+│   │   ├── weather-wind
+│   │   ├── weather-temp
+│   │   └── weather-sun
+│   ├── 2023
+│   │   ├── weather-wind
+│   │   ├── weather-temp
+│   │   └── weather-sun
+│   └── 2024
+│       ├── weather-wind
+│       ├── weather-temp
+│       └── weather-sun
+├── live
+│   ├── weather-wind
+│   ├── weather-temp
+│   └── weather-sun
+└── analytics
+```                                                  
 ![diagram](./assets/HDFS_strucutre_diagram.png)
+
+
+
