@@ -1,0 +1,33 @@
+
+Latency Test Summary
+-------------------
+Test: Latency-Test-100msg-s
+Target Throughput: 100 msg/s
+Sample Count: 13
+
+Latency Statistics:
+  Average: 7251.00 ms
+  Median (P50): 7569.00 ms
+  P95: 13569.00 ms
+  P99: 13569.00 ms
+  Min: 1569.00 ms
+  Max: 13569.00 ms
+  Std Dev: 3757.39 ms
+    
+
+======================================================================
+Detailed Data Points:
+======================================================================
+2025-10-20 23:41:00       sunshine     Silstrup              1880.00 ms
+2025-10-20 23:41:00       sunshine     Silstrup              3880.00 ms
+2025-10-20 23:41:00       sunshine     Silstrup              5880.00 ms
+2025-10-20 23:41:00       sunshine     Silstrup              7880.00 ms
+2025-10-20 23:41:00       sunshine     Silstrup              9880.00 ms
+2025-10-20 23:41:00       sunshine     Silstrup             11880.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport     1569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport     3569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport     5569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport     7569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport     9569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport    11569.00 ms
+2025-10-20 23:41:00       wind_speed   Klaksvik Heliport    13569.00 ms
