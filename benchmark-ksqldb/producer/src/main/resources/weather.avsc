@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "WeatherData",
+  "namespace": "ua.playground.benchmark",
+  "fields": [
+    {"name": "timeObserved", "type": "string"},
+    {"name": "stationId", "type": "int"},
+    {"name": "stationName", "type": "string"},
+    {"name": "metric", "type": "string"},
+    {"name": "value", "type": "double"},
+    {"name": "producer_ts", "type": "long"}
+  ]
+}

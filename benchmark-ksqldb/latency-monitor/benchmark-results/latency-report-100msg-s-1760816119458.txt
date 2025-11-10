@@ -1,0 +1,46 @@
+
+Latency Test Summary
+-------------------
+Test: Latency-Test-100msg-s
+Target Throughput: 100 msg/s
+Sample Count: 26
+
+Latency Statistics:
+  Average: 6828.0%.2f ms
+  Median (P50): 7172.0%.2f ms
+  P95: 12484.0%.2f ms
+  P99: 13172.0%.2f ms
+  Min: 484.0%.2f ms
+  Max: 13172.0%.2f ms
+  Std Dev: 3757.4374246286525%.2f ms
+    
+
+======================================================================
+Detailed Data Points:
+======================================================================
+2025-10-18 21:34:30       sunshine     Silstrup              484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             1484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             2484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             3484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             4484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             5484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             6484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             7484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             8484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             9484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             10484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             11484.00 ms
+2025-10-18 21:34:30       sunshine     Silstrup             12484.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    1172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    2172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    3172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    4172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    5172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    6172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    7172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    8172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    9172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    10172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    11172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    12172.00 ms
+2025-10-18 21:34:30       wind_speed   Klaksvik Heliport    13172.00 ms

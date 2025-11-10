@@ -1,0 +1,120 @@
+# k8s/deployment.yaml
+# ================================================================
+# KUBERNETES DEPLOYMENT - Using Your Existing Kafka (kafka-g5)
+# Namespace: bd-bd-gr-05
+# ================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+    spec:
+      containers:
+      - name: schema-registry
+        image: confluentinc/cp-schema-registry:7.5.0
+        ports:
+        - containerPort: 8081
+        env:
+        - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+          # This should point to the headless service for peer discovery
+          value: "kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY_HOST_NAME
+          value: "schema-registry"
+        - name: SCHEMA_REGISTRY_LISTENERS
+          value: "http://0.0.0.0:8081"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+  namespace: bd-bd-gr-05
+spec:
+  ports:
+  - port: 8081
+  selector:
+    app: schema-registry
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-consumer
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-consumer
+  template:
+    metadata:
+      labels:
+        app: spark-consumer
+    spec:
+      containers:
+      - name: spark-consumer
+        image: ortemiy/spark-consumer:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4040
+          name: spark-ui
+        args: ["100"]
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          # <-- SIMPLIFIED AND FIXED: Point to the stable client service
+          value: "kafka-g5.bd-bd-gr-05.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY_URL
+          value: "http://schema-registry.bd-bd-gr-05.svc.cluster.local:8081"
+        - name: WINDOW_DURATION
+          value: "1 minute"
+        - name: TRIGGER_INTERVAL
+          value: "2 seconds"
+        - name: SHUFFLE_PARTITIONS
+          value: "10"
+        - name: MAX_OFFSETS_PER_TRIGGER
+          value: "5000"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        volumeMounts:
+        - name: checkpoint-storage
+          mountPath: /tmp/spark/checkpoints
+      volumes:
+      - name: checkpoint-storage
+        emptyDir:
+          sizeLimit: 5Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-consumer
+  namespace: bd-bd-gr-05
+spec:
+  selector:
+    app: spark-consumer
+  ports:
+  - port: 4040
+    name: spark-ui
+    targetPort: 4040
