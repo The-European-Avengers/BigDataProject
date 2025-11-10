@@ -1,0 +1,48 @@
+# ksqlDB Producer Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ksqldb-producer
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ksqldb-producer
+  template:
+    metadata:
+      labels:
+        app: ksqldb-producer
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: ksqldb-producer
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/ksqldb-producer:latest
+          imagePullPolicy: Always
+          args: ["100"] # Example benchmark parameter
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+            - name: SCHEMA_REGISTRY_URL
+              value: "http://schema-registry:8081"
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+            limits:
+              memory: "6Gi"
+              cpu: "4000m"
+---
+# ksqlDB Producer Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ksqldb-producer
+  namespace: bd-bd-gr-05
+spec:
+  selector:
+    app: ksqldb-producer
+  ports:
+    - port: 8080
+      targetPort: 8080
