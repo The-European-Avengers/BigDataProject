@@ -1,5 +1,8 @@
 # Big Data Project Overview 
 
+## Architecture
+![Architecture Diagram](./assets/arch-diagram.png)
+
 ## Scope
 - Costumers: open source platform, can be valuable for example to EnergiNet and private businesses which provides energy.
 
