@@ -1,0 +1,15 @@
+date;hour;from_time;to_time;station_id;station_name;parameter;value;latitude;longitude
+2024-01-01;1;01:00;02:00;6019;Silstrup;max_wind_speed_10min;6.1;56.93;8.6412
+2024-01-01;1;01:00;02:00;6019;Silstrup;max_wind_speed_3sec;8.1;56.93;8.6412
+2024-01-01;1;01:00;02:00;6019;Silstrup;mean_wind_speed;5.5;56.93;8.6412
+2024-01-01;2;02:00;03:00;6019;Silstrup;max_wind_speed_10min;5.3;56.93;8.6412
+2024-01-01;2;02:00;03:00;6019;Silstrup;max_wind_speed_3sec;6.9;56.93;8.6412
+2024-01-01;2;02:00;03:00;6019;Silstrup;mean_wind_speed;4.5;56.93;8.6412
+2024-01-01;3;03:00;04:00;6019;Silstrup;max_wind_speed_10min;4.4;56.93;8.6412
+2024-01-01;3;03:00;04:00;6019;Silstrup;max_wind_speed_3sec;6.1;56.93;8.6412
+2024-01-01;3;03:00;04:00;6019;Silstrup;mean_wind_speed;4.0;56.93;8.6412
+2024-01-01;4;04:00;05:00;6019;Silstrup;max_wind_speed_10min;4.3;56.93;8.6412
+2024-01-01;4;04:00;05:00;6019;Silstrup;max_wind_speed_3sec;6.2;56.93;8.6412
+2024-01-01;4;04:00;05:00;6019;Silstrup;mean_wind_speed;4.1;56.93;8.6412
+2024-01-01;5;05:00;06:00;6019;Silstrup;max_wind_speed_10min;4.9;56.93;8.6412
+2024-01-01;5;05:00;06:00;6019;Silstrup;max_wind_speed_3sec;6.7;56.93;8.6412

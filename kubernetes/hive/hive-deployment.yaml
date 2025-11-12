@@ -1,0 +1,145 @@
+# --------------------------------------------------------
+# 1️⃣ Hadoop Config ConfigMap
+# --------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hadoop-config
+  namespace: bd-bd-gr-05
+data:
+  core-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <configuration>
+    <property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
+    <property><name>fs.defaultFS</name><value>hdfs://namenode-g5:9000</value></property>
+    <property><name>hadoop.http.staticuser.user</name><value>root</value></property>
+    <property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
+    <property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
+    </configuration>
+
+  hdfs-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <configuration>
+    <property><name>dfs.namenode.datanode.registration.ip-hostname-check</name><value>false</value></property>
+    <property><name>dfs.webhdfs.enabled</name><value>true</value></property>
+    <property><name>dfs.permissions</name><value>false</value></property>
+    <property><name>dfs.permissions.enabled</name><value>false</value></property>
+    <property><name>dfs.namenode.name.dir</name><value>file:///hadoop/dfs/name</value></property>
+    <property><name>dfs.namenode.rpc-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.namenode.servicerpc-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.namenode.http-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.namenode.https-bind-host</name><value>0.0.0.0</value></property>
+    <property><name>dfs.client.use.datanode.hostname</name><value>true</value></property>
+    <property><name>dfs.datanode.use.datanode.hostname</name><value>true</value></property>
+    </configuration>
+
+
+---
+
+# --------------------------------------------------------
+# 2️⃣ Hive Metastore Deployment
+# --------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-metastore
+  template:
+    metadata:
+      labels:
+        app: hive-metastore
+    spec:
+      containers:
+      - name: metastore
+        image: bde2020/hive:2.3.2-postgresql-metastore
+        env:
+          - name: HADOOP_CONF_DIR
+            value: /opt/hadoop
+          - name: METASTORE_DB_HOST
+            value: postgresql # replace if different
+          - name: METASTORE_DB_PORT
+            value: "5432"
+          - name: METASTORE_DB_NAME
+            value: hive
+          - name: METASTORE_DB_USER
+            value: root
+          - name: METASTORE_DB_PASS
+            value: pwd1234
+        volumeMounts:
+          - name: hadoop-config
+            mountPath: /opt/hadoop
+      volumes:
+        - name: hadoop-config
+          configMap:
+            name: hadoop-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+  namespace: bd-bd-gr-05
+spec:
+  selector:
+    app: hive-metastore
+  ports:
+    - name: thrift
+      port: 9083
+      targetPort: 9083
+
+---
+
+# --------------------------------------------------------
+# 3️⃣ HiveServer2 Deployment
+# --------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-server
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hive-server
+  template:
+    metadata:
+      labels:
+        app: hive-server
+    spec:
+      containers:
+      - name: hive
+        image: bde2020/hive:2.3.2-postgresql-metastore
+        env:
+          - name: HADOOP_CONF_DIR
+            value: /etc/hadoop
+          - name: HIVE_METASTORE_URI
+            value: thrift://hive-metastore:9083
+        volumeMounts:
+          - name: hadoop-config
+            mountPath: /etc/hadoop
+      volumes:
+        - name: hadoop-config
+          configMap:
+            name: hadoop-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-server
+  namespace: bd-bd-gr-05
+spec:
+  selector:
+    app: hive-server
+  ports:
+    - name: hive
+      port: 10000
+      targetPort: 10000
