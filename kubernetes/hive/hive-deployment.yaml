@@ -1,5 +1,100 @@
+# ========================================================
+# Complete Hive Deployment with Embedded PostgreSQL
+# ========================================================
+
 # --------------------------------------------------------
-# 1️⃣ Hadoop Config ConfigMap
+# 1️⃣ PostgreSQL PersistentVolumeClaim
+# --------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-pvc
+  namespace: bd-bd-gr-05
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+
+# --------------------------------------------------------
+# 2️⃣ PostgreSQL Deployment
+# --------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+        env:
+          - name: POSTGRES_DB
+            value: hive
+          - name: POSTGRES_USER
+            value: root
+          - name: POSTGRES_PASSWORD
+            value: pwd1234
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+        ports:
+          - containerPort: 5432
+            name: postgres
+        volumeMounts:
+          - name: postgres-storage
+            mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - root
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - root
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgresql-pvc
+---
+
+# --------------------------------------------------------
+# 3️⃣ PostgreSQL Service
+# --------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: bd-bd-gr-05
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: postgresql
+---
+
+# --------------------------------------------------------
+# 4️⃣ Hadoop & Hive Config ConfigMap
 # --------------------------------------------------------
 apiVersion: v1
 kind: ConfigMap
@@ -35,11 +130,38 @@ data:
     <property><name>dfs.datanode.use.datanode.hostname</name><value>true</value></property>
     </configuration>
 
-
+  hive-site.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://hive-metastore:9083</value>
+      </property>
+      <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>/user/hive/warehouse</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:postgresql://postgresql:5432/hive</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionDriverName</name>
+        <value>org.postgresql.Driver</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionUserName</name>
+        <value>root</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionPassword</name>
+        <value>pwd1234</value>
+      </property>
+    </configuration>
 ---
 
 # --------------------------------------------------------
-# 2️⃣ Hive Metastore Deployment
+# 5️⃣ Hive Metastore Deployment
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -56,48 +178,66 @@ spec:
       labels:
         app: hive-metastore
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgresql 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: init-schema
+        image: bde2020/hive:2.3.2-postgresql-metastore
+        command: ['sh', '-c']
+        args:
+          - |
+            if schematool -dbType postgres -info 2>&1 | grep -q "Metastore schema version"; then
+              echo "Schema already initialized"
+            else
+              echo "Initializing schema..."
+              schematool -dbType postgres -initSchema || true
+            fi
+        env:
+          - name: HADOOP_CONF_DIR
+            value: /opt/hive/conf
+        volumeMounts:
+          - name: hive-config
+            mountPath: /opt/hive/conf
       containers:
       - name: metastore
         image: bde2020/hive:2.3.2-postgresql-metastore
+        command: ['/opt/hive/bin/hive']
+        args: ['--service', 'metastore']
         env:
           - name: HADOOP_CONF_DIR
-            value: /opt/hadoop
-          - name: METASTORE_DB_HOST
-            value: postgresql # replace if different
-          - name: METASTORE_DB_PORT
-            value: "5432"
-          - name: METASTORE_DB_NAME
-            value: hive
-          - name: METASTORE_DB_USER
-            value: root
-          - name: METASTORE_DB_PASS
-            value: pwd1234
+            value: /opt/hive/conf
+        ports:
+          - containerPort: 9083
+            name: metastore
         volumeMounts:
-          - name: hadoop-config
-            mountPath: /opt/hadoop
+          - name: hive-config
+            mountPath: /opt/hive/conf
       volumes:
-        - name: hadoop-config
+        - name: hive-config
           configMap:
             name: hadoop-config
-
 ---
+
+# --------------------------------------------------------
+# 6️⃣ Hive Metastore Service
+# --------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
   name: hive-metastore
   namespace: bd-bd-gr-05
 spec:
+  ports:
+    - port: 9083
+      targetPort: 9083
+      name: metastore
   selector:
     app: hive-metastore
-  ports:
-    - name: thrift
-      port: 9083
-      targetPort: 9083
-
 ---
 
 # --------------------------------------------------------
-# 3️⃣ HiveServer2 Deployment
+# 7️⃣ Hive Server Deployment
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -114,32 +254,49 @@ spec:
       labels:
         app: hive-server
     spec:
+      initContainers:
+      - name: wait-for-metastore
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z hive-metastore 9083; do echo waiting for metastore; sleep 2; done;']
       containers:
       - name: hive
         image: bde2020/hive:2.3.2-postgresql-metastore
+        command: ['/opt/hive/bin/hive']
+        args: ['--service', 'hiveserver2']
         env:
           - name: HADOOP_CONF_DIR
-            value: /etc/hadoop
-          - name: HIVE_METASTORE_URI
-            value: thrift://hive-metastore:9083
+            value: /opt/hive/conf
+          - name: HIVE_CONF_DIR
+            value: /opt/hive/conf
+        ports:
+          - containerPort: 10000
+            name: hiveserver2
+          - containerPort: 10002
+            name: webui
         volumeMounts:
-          - name: hadoop-config
-            mountPath: /etc/hadoop
+          - name: hive-config
+            mountPath: /opt/hive/conf
       volumes:
-        - name: hadoop-config
+        - name: hive-config
           configMap:
             name: hadoop-config
-
 ---
+
+# --------------------------------------------------------
+# 8️⃣ Hive Server Service
+# --------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
   name: hive-server
   namespace: bd-bd-gr-05
 spec:
+  ports:
+    - port: 10000
+      targetPort: 10000
+      name: hiveserver2
+    - port: 10002
+      targetPort: 10002
+      name: webui
   selector:
     app: hive-server
-  ports:
-    - name: hive
-      port: 10000
-      targetPort: 10000
