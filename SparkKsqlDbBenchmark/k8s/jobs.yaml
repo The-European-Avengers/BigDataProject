@@ -20,7 +20,7 @@ spec:
         args: ["100"]
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+          value: "kafka-g5:9092"
         - name: SCHEMA_REGISTRY_URL
           value: "http://schema-registry:8081"
         resources:
@@ -54,7 +54,7 @@ spec:
         args: ["100"]
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+          value: "kafka-g5:9092"
         - name: SCHEMA_REGISTRY_URL
           value: "http://schema-registry:8081"
         - name: INPUT_TOPIC
