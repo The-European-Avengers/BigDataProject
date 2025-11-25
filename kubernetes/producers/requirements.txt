@@ -11,4 +11,11 @@ pyproj
 rtree
 fastavro
 
+confluent-kafka
+httpx
+cachetools
+authlib
+
 pytz
+
+confluent_kafka

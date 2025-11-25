@@ -1,4 +1,4 @@
-date;hour;from_time;to_time;station_id;station_name;parameter;value;latitude;longitude
+reading_date;hour;from_time;to_time;station_id;station_name;parameter;value;latitude;longitude
 2024-01-01;1;01:00;02:00;6019;Silstrup;max_wind_speed_10min;6.1;56.93;8.6412
 2024-01-01;1;01:00;02:00;6019;Silstrup;max_wind_speed_3sec;8.1;56.93;8.6412
 2024-01-01;1;01:00;02:00;6019;Silstrup;mean_wind_speed;5.5;56.93;8.6412
