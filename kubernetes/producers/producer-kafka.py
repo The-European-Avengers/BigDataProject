@@ -3,27 +3,23 @@ import time
 import json
 import requests
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import Point
-from kafka import KafkaProducer
+from confluent_kafka import Producer
+from confluent_kafka.avro import AvroProducer
+from confluent_kafka.avro.serializer import SerializerError
 from datetime import datetime, timezone
-from fastavro import schemaless_writer
-import io
 
 # === Environment Variables ===
 api_url = os.getenv("API_URL", "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube")
 api_key = os.getenv("API_KEY", "YOUR_DEFAULT_KEY")
 topic = os.getenv("TOPIC", "weather")
-bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5:9092")
+bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5-controller-headless:9092")
+schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
 poll_interval = int(os.getenv("POLL_INTERVAL", "120"))
 parameter = os.getenv("PARAMETER_NAME", "wind-speed-10m")
 
 # Current date in UTC
-today = datetime.now(timezone.utc).date()  # e.g., 2025-10-25
-
-# Format as ISO 8601 string for the API
-datetime_param = f"{today}T00:00:00Z/.."  # 2025-10-25T00:00:00Z/..
-
+today = datetime.now(timezone.utc).date()
+datetime_param = f"{today}T00:00:00Z/.."
 
 # === API Parameters ===
 params = {
@@ -36,10 +32,12 @@ params = {
 }
 
 print(f"Starting producer for parameter: {parameter}")
+print(f"Schema Registry: {schema_registry_url}")
 
-# === Avro ===
-def get_avro_schema(parameter_name):
-    return {
+# === Avro Schema (will be registered with Schema Registry) ===
+def get_avro_schema_str(parameter_name):
+    """Returns Avro schema as JSON string"""
+    return json.dumps({
         "namespace": "weather.avro",
         "type": "record",
         "name": "WeatherRecord",
@@ -49,22 +47,36 @@ def get_avro_schema(parameter_name):
             {"name": parameter_name, "type": "double"},
             {"name": "step", "type": "string"}
         ]
-    }
+    })
 
-def avro_serializer(record, schema):
-    bytes_writer = io.BytesIO()
-    schemaless_writer(bytes_writer, schema, record)
-    return bytes_writer.getvalue()
+# Get schema string
+value_schema_str = get_avro_schema_str(parameter)
+print(f"Schema: {value_schema_str}")
 
-avro_schema = get_avro_schema(parameter)  # parameter = wind-speed-10m, temperature-2m or direct-solar-exposure
+# === Kafka AvroProducer with Schema Registry ===
+producer_config = {
+    'bootstrap.servers': bootstrap_servers,
+    'schema.registry.url': schema_registry_url,
+    # Optional: performance tuning
+    'compression.type': 'snappy',
+    'linger.ms': 10,
+    'batch.size': 16384
+}
 
-# === Kafka Producer ===
-producer = KafkaProducer(
-    bootstrap_servers=[bootstrap_servers],
-    value_serializer=lambda v: avro_serializer(v, avro_schema)
+producer = AvroProducer(
+    producer_config,
+    default_value_schema=value_schema_str
 )
 
-print("Producer started. bootstrap:", bootstrap_servers, " topic:", topic, " parameter:", parameter)
+print(f"Producer started. Bootstrap: {bootstrap_servers}, Topic: {topic}, Parameter: {parameter}")
+
+# === Delivery callback ===
+def delivery_report(err, msg):
+    """Called once for each message produced to indicate delivery result."""
+    if err is not None:
+        print(f'Message delivery failed: {err}')
+    else:
+        print(f'Message delivered to {msg.topic()} [{msg.partition()}] @ offset {msg.offset()}')
 
 # === Loop to Continuously Fetch and Send ===
 while True:
@@ -83,6 +95,7 @@ while True:
         df = pd.DataFrame(records)
         payload = df.to_dict(orient="records")
         print(f"Fetched {len(payload)} records from API.")
+        
         for record in payload:
             avro_record = {
                 "lon": record["lon"],
@@ -90,8 +103,23 @@ while True:
                 parameter: record[parameter],
                 "step": record["step"]
             }
-            producer.send(topic, avro_record)
-            #print(f"Sent record to topic {topic}: {avro_record}")
+            
+            try:
+                # Send with schema registry integration
+                producer.produce(
+                    topic=topic, 
+                    value=avro_record,
+                    callback=delivery_report
+                )
+                # Trigger callbacks
+                producer.poll(0)
+                
+            except SerializerError as e:
+                print(f"Message serialization failed: {e}")
+            except Exception as e:
+                print(f"Error sending message: {e}")
+        
+        # Wait for any outstanding messages to be delivered
         producer.flush()
         print(f"Sent {len(payload)} records to topic {topic}")
 

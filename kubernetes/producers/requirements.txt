@@ -1,14 +1,12 @@
 kafka-python==2.0.2
 requests==2.31.0
-
 pandas>=2.0.3
 numpy>=1.26.0
-
 geopandas
 shapely
 fiona
 pyproj
 rtree
+confluent-kafka[avro]>=2.3.0
 fastavro
-
 pytz
