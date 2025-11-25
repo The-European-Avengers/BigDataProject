@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda-console
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda-console
+  template:
+    metadata:
+      labels:
+        app: redpanda-console
+    spec:
+      containers:
+      - name: console
+        image: docker.redpanda.com/redpandadata/console:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+        - name: KAFKA_SCHEMAREGISTRY_ENABLED
+          value: "true"
+        - name: KAFKA_SCHEMAREGISTRY_URLS
+          value: "http://schema-registry:8081"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-console
+  namespace: bd-bd-gr-05
+spec:
+  type: ClusterIP
+  selector:
+    app: redpanda-console
+  ports:
+  - port: 8080
+    targetPort: 8080
