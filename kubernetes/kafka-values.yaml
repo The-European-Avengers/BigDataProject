@@ -1,52 +1,55 @@
-# kafka-values.yaml
-# Use legacy Bitnami images
+# kafka-values.yaml - CORRECTED
 image:
   registry: docker.io
   repository: bitnamilegacy/kafka
   tag: 3.9.0-debian-12-r1
 
-# Enable KRaft mode
 kraft:
   enabled: true
 
 controller:
   replicaCount: 3
-  
-# Define listeners
+
 listeners:
   client:
-    name: CLIENT
-    protocol: PLAINTEXT
     containerPort: 9092
-  internal:
-    name: INTERNAL
     protocol: PLAINTEXT
-    containerPort: 9094
+    name: CLIENT
   controller:
-    name: CONTROLLER
-    protocol: PLAINTEXT
     containerPort: 9093
+    protocol: PLAINTEXT
+    name: CONTROLLER
+  interbroker:
+    containerPort: 9094
+    protocol: PLAINTEXT
+    name: INTERNAL
 
-# Advertise listeners
-advertisedListeners: "CLIENT://kafka-g5-controller-$(POD_NAME).kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+# CRITICAL: Advertise the headless service DNS names
+advertisedListeners: "CLIENT://$(MY_POD_NAME).kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,INTERNAL://$(MY_POD_NAME).kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9094"
 
-# Controller quorum
+listenerSecurityProtocolMap: "CLIENT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+interBrokerListenerName: "INTERNAL"
+
 controllerQuorumVoters: "0@kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,1@kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,2@kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093"
 
-# Resource limits
 resources:
   requests:
     memory: "2Gi"
-    cpu: "1000m"
+    cpu: "500m"
   limits:
     memory: "4Gi"
     cpu: "2000m"
 
-# Persistence
 persistence:
   enabled: true
   size: 8Gi
 
-# Replication settings
 defaultReplicationFactor: 3
 minInsyncReplicas: 2
+
+# CRITICAL: Set pod name environment variable
+extraEnvVars:
+  - name: MY_POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name

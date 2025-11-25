@@ -1,4 +1,3 @@
-
 # Schema Registry Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -17,12 +16,13 @@ spec:
     spec:
       containers:
       - name: schema-registry
-        image: bitnamilegacy/schema-registry:7.8.0-debian-12-r5  # Match with Kafka
+        image: bitnamilegacy/schema-registry:7.8.0-debian-12-r5
         ports:
         - containerPort: 8081
         env:
         - name: SCHEMA_REGISTRY_KAFKA_BROKERS
-          value: "PLAINTEXT://kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,PLAINTEXT://kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,PLAINTEXT://kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+          # CRITICAL FIX: Use INTERNAL listener (port 9094) for Schema Registry
+          value: "PLAINTEXT://kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9094,PLAINTEXT://kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9094,PLAINTEXT://kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9094"
         - name: SCHEMA_REGISTRY_LISTENERS
           value: "http://0.0.0.0:8081"
         - name: SCHEMA_REGISTRY_DEBUG
