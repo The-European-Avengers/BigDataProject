@@ -2,26 +2,27 @@ import os
 import time
 import json
 import requests
-import pandas as pd
-from confluent_kafka import Producer
-from confluent_kafka.avro import AvroProducer
-from confluent_kafka.avro.serializer import SerializerError
 from datetime import datetime, timezone
 
-# === Environment Variables ===
+from confluent_kafka import SerializingProducer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer
+
+
+# ===============================================================
+# CONFIG
+# ===============================================================
+
 api_url = os.getenv("API_URL", "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube")
 api_key = os.getenv("API_KEY", "YOUR_DEFAULT_KEY")
 topic = os.getenv("TOPIC", "weather")
-bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5-controller-headless:9092")
-schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
+bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5:9092")
 poll_interval = int(os.getenv("POLL_INTERVAL", "120"))
 parameter = os.getenv("PARAMETER_NAME", "wind-speed-10m")
 
-# Current date in UTC
 today = datetime.now(timezone.utc).date()
 datetime_param = f"{today}T00:00:00Z/.."
 
-# === API Parameters ===
 params = {
     "bbox": "7.0,54.5,16.0,58.0",
     "parameter-name": parameter,
@@ -32,98 +33,201 @@ params = {
 }
 
 print(f"Starting producer for parameter: {parameter}")
-print(f"Schema Registry: {schema_registry_url}")
 
-# === Avro Schema (will be registered with Schema Registry) ===
-def get_avro_schema_str(parameter_name):
-    """Returns Avro schema as JSON string"""
-    return json.dumps({
-        "namespace": "weather.avro",
-        "type": "record",
-        "name": "WeatherRecord",
-        "fields": [
-            {"name": "lon", "type": "double"},
-            {"name": "lat", "type": "double"},
-            {"name": parameter_name, "type": "double"},
-            {"name": "step", "type": "string"}
-        ]
-    })
 
-# Get schema string
-value_schema_str = get_avro_schema_str(parameter)
-print(f"Schema: {value_schema_str}")
+# ===============================================================
+# AVRO SCHEMA (with default value for backward compatibility)
+# ===============================================================
 
-# === Kafka AvroProducer with Schema Registry ===
-producer_config = {
-    'bootstrap.servers': bootstrap_servers,
-    'schema.registry.url': schema_registry_url,
-    # Optional: performance tuning
-    'compression.type': 'snappy',
-    'linger.ms': 10,
-    'batch.size': 16384
+weather_schema = """
+{
+  "namespace": "weather.avro",
+  "type": "record",
+  "name": "WeatherRecord",
+  "fields": [
+    {"name": "lon", "type": "double"},
+    {"name": "lat", "type": "double"},
+    {"name": "value", "type": "double"},
+    {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string", "default": "unknown"}
+  ]
 }
+"""
 
-producer = AvroProducer(
-    producer_config,
-    default_value_schema=value_schema_str
+
+# ===============================================================
+# SCHEMA REGISTRY + PRODUCER
+# ===============================================================
+
+schema_registry_conf = {"url": os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")}
+schema_registry = SchemaRegistryClient(schema_registry_conf)
+
+avro_serializer = AvroSerializer(
+    schema_registry_client=schema_registry,
+    schema_str=weather_schema
 )
 
-print(f"Producer started. Bootstrap: {bootstrap_servers}, Topic: {topic}, Parameter: {parameter}")
+producer_conf = {
+    "bootstrap.servers": bootstrap_servers,
+    "value.serializer": avro_serializer
+}
 
-# === Delivery callback ===
+producer = SerializingProducer(producer_conf)
+
+print("Producer connected:", bootstrap_servers, " topic:", topic, " parameter:", parameter)
+
+
+# ===============================================================
+# API FETCH WITH RETRIES
+# ===============================================================
+
+def fetch_with_retry(url, params, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            print(f"Fetching data (attempt {attempt + 1}/{max_retries})...")
+            print(f"URL: {url}")
+            print(f"Params: {params}")
+            
+            session = requests.Session()
+            
+            # Show when connection starts
+            print("Connecting to API...")
+            start_time = time.time()
+            
+            response = session.get(
+                url,
+                params=params,
+                timeout=(30, 600),
+                stream=True  # Stream response to show progress
+            )
+            
+            connect_time = time.time() - start_time
+            print(f"Connected in {connect_time:.2f}s. Status: {response.status_code}")
+            
+            response.raise_for_status()
+            
+            # Read response in chunks to show progress
+            print("Reading response...")
+            content = b''
+            chunk_count = 0
+            for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+                if chunk:
+                    content += chunk
+                    chunk_count += 1
+                    if chunk_count % 10 == 0:  # Every 10MB
+                        print(f"  Downloaded {len(content) / 1024 / 1024:.2f} MB...")
+            
+            total_time = time.time() - start_time
+            print(f"Download complete in {total_time:.2f}s. Total size: {len(content) / 1024 / 1024:.2f} MB")
+            
+            print("Parsing JSON...")
+            data = json.loads(content)
+            print(f"JSON parsed successfully. Features: {len(data.get('features', []))}")
+            return data
+
+        except Exception as e:
+            print(f"Error on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 30
+                print(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                raise
+
+
+# ===============================================================
+# DELIVERY CALLBACK
+# ===============================================================
+
 def delivery_report(err, msg):
-    """Called once for each message produced to indicate delivery result."""
+    """Callback called once message is delivered or fails"""
     if err is not None:
         print(f'Message delivery failed: {err}')
-    else:
-        print(f'Message delivered to {msg.topic()} [{msg.partition()}] @ offset {msg.offset()}')
 
-# === Loop to Continuously Fetch and Send ===
+
+# ===============================================================
+# SEND RECORD TO KAFKA (AVRO)
+# ===============================================================
+
+def send_record(lon, lat, value, step, parameter_name):
+    record = {
+        "lon": lon,
+        "lat": lat,
+        "value": value,
+        "step": step,
+        "parameter": parameter_name
+    }
+    producer.produce(
+        topic=topic, 
+        value=record,
+        on_delivery=delivery_report
+    )
+
+# ===============================================================
+# SEND RECORDS IN BATCHES (Memory Efficient)
+# ===============================================================
+
+def process_features_in_batches(features, batch_size=10000):
+    """Process features in batches to avoid memory issues"""
+    total = len(features)
+    sent_count = 0
+    
+    for i in range(0, total, batch_size):
+        batch = features[i:i + batch_size]
+        
+        for f in batch:
+            lon, lat = f["geometry"]["coordinates"]
+            props = f["properties"]
+            
+            send_record(
+                lon=lon,
+                lat=lat,
+                value=props[parameter],
+                step=props["step"],
+                parameter_name=parameter
+            )
+            sent_count += 1
+        
+        # Flush after each batch
+        print(f"Sent {sent_count}/{total} records...")
+        producer.flush()
+        
+        # Small delay to avoid overwhelming Kafka
+        time.sleep(0.1)
+    
+    return sent_count
+
+
+# ===============================================================
+# MAIN LOOP (Updated)
+# ===============================================================
+
 while True:
     try:
-        response = requests.get(api_url, params=params)
-        response.raise_for_status()
-        data = response.json()
+        print("\n" + "="*60)
+        print(f"Starting fetch cycle: {datetime.now()}")
+        print(f"Parameter: {parameter}")
+        print(f"Topic: {topic}")
+        print("="*60)
 
-        records = []
-        for f in data['features']:
-            lon, lat = f['geometry']['coordinates']
-            props = f['properties']
-            props.update({"lon": lon, "lat": lat})
-            records.append(props)
+        data = fetch_with_retry(api_url, params)
+        features = data.get("features", [])
+        print(f"Fetched {len(features)} features from API")
 
-        df = pd.DataFrame(records)
-        payload = df.to_dict(orient="records")
-        print(f"Fetched {len(payload)} records from API.")
+        # Process in batches to manage memory
+        print("Processing and sending records to Kafka in batches...")
+        sent_count = process_features_in_batches(features, batch_size=10000)
         
-        for record in payload:
-            avro_record = {
-                "lon": record["lon"],
-                "lat": record["lat"],
-                parameter: record[parameter],
-                "step": record["step"]
-            }
-            
-            try:
-                # Send with schema registry integration
-                producer.produce(
-                    topic=topic, 
-                    value=avro_record,
-                    callback=delivery_report
-                )
-                # Trigger callbacks
-                producer.poll(0)
-                
-            except SerializerError as e:
-                print(f"Message serialization failed: {e}")
-            except Exception as e:
-                print(f"Error sending message: {e}")
+        print(f"✓ Successfully sent {sent_count} records to Kafka topic '{topic}'")
         
-        # Wait for any outstanding messages to be delivered
-        producer.flush()
-        print(f"Sent {len(payload)} records to topic {topic}")
+        # Clear features from memory
+        del features
+        del data
 
     except Exception as e:
-        print(f"Error fetching/sending data: {e}")
+        print(f"✗ Error in main loop: {e}")
+        import traceback
+        traceback.print_exc()
 
+    print(f"\nSleeping for {poll_interval} seconds...")
     time.sleep(poll_interval)

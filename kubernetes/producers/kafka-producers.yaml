@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kafka-producer-wind
+  namespace: bd-bd-gr-05
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "wind-speed-10m"
@@ -15,6 +16,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kafka-producer-temp
+  namespace: bd-bd-gr-05
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "temperature-2m"
@@ -28,6 +30,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kafka-producer-sun
+  namespace: bd-bd-gr-05
 data:
   API_URL: "https://dmigw.govcloud.dk/v1/forecastedr/collections/harmonie_dini_sf/cube"
   PARAMETER_NAME: "direct-solar-exposure"
@@ -36,3 +39,100 @@ data:
   SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
   POLL_INTERVAL: "10800"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-1-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-1-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-1-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-wind
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-2-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-2-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-2-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-temp
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-3-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-3-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-3-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/live-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-producer-sun
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
