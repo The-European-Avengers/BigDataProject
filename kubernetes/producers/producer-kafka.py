@@ -2,7 +2,10 @@ import os
 import time
 import json
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+import geopandas as gpd
+from shapely.geometry import Point
 
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -19,24 +22,37 @@ topic = os.getenv("TOPIC", "weather")
 bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5:9092")
 poll_interval = int(os.getenv("POLL_INTERVAL", "120"))
 parameter = os.getenv("PARAMETER_NAME", "wind-speed-10m")
-
-today = datetime.now(timezone.utc).date()
-datetime_param = f"{today}T00:00:00Z/.."
-
-params = {
-    "bbox": "7.0,54.5,16.0,58.0",
-    "parameter-name": parameter,
-    "datetime": datetime_param,
-    "crs": "crs84",
-    "f": "GeoJSON",
-    "api-key": api_key
-}
+shapefile_path = os.getenv("SHAPEFILE_PATH", "./dk.shp")
 
 print(f"Starting producer for parameter: {parameter}")
 
 
 # ===============================================================
-# AVRO SCHEMA (with default value for backward compatibility)
+# LOAD DENMARK SHAPEFILE
+# ===============================================================
+
+print(f"Loading Denmark shapefile from: {shapefile_path}")
+
+# Check if shapefile exists
+if not os.path.exists(shapefile_path):
+    print(f"✗ ERROR: Shapefile not found at {shapefile_path}")
+    print(f"  Current working directory: {os.getcwd()}")
+    print(f"  Please ensure the following files are present:")
+    print(f"    - {shapefile_path}")
+    print(f"    - {shapefile_path.replace('.shp', '.shx')}")
+    print(f"    - {shapefile_path.replace('.shp', '.dbf')}")
+    print(f"    - {shapefile_path.replace('.shp', '.prj')}")
+    print(f"\n  Set SHAPEFILE_PATH environment variable to the correct path.")
+    exit(1)
+
+dk_shape = gpd.read_file(shapefile_path)
+dk_shape = dk_shape.to_crs("EPSG:4326")  # Ensure CRS is WGS84
+dk_boundary = dk_shape.union_all()  # Updated to use union_all() instead of unary_union
+print(f"✓ Shapefile loaded successfully from {shapefile_path}")
+
+
+# ===============================================================
+# AVRO SCHEMA
 # ===============================================================
 
 weather_schema = """
@@ -90,7 +106,6 @@ def fetch_with_retry(url, params, max_retries=3):
             
             session = requests.Session()
             
-            # Show when connection starts
             print("Connecting to API...")
             start_time = time.time()
             
@@ -98,7 +113,7 @@ def fetch_with_retry(url, params, max_retries=3):
                 url,
                 params=params,
                 timeout=(30, 600),
-                stream=True  # Stream response to show progress
+                stream=True
             )
             
             connect_time = time.time() - start_time
@@ -106,15 +121,14 @@ def fetch_with_retry(url, params, max_retries=3):
             
             response.raise_for_status()
             
-            # Read response in chunks to show progress
             print("Reading response...")
             content = b''
             chunk_count = 0
-            for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB chunks
+            for chunk in response.iter_content(chunk_size=1024*1024):
                 if chunk:
                     content += chunk
                     chunk_count += 1
-                    if chunk_count % 10 == 0:  # Every 10MB
+                    if chunk_count % 10 == 0:
                         print(f"  Downloaded {len(content) / 1024 / 1024:.2f} MB...")
             
             total_time = time.time() - start_time
@@ -133,6 +147,26 @@ def fetch_with_retry(url, params, max_retries=3):
                 time.sleep(wait_time)
             else:
                 raise
+
+
+# ===============================================================
+# FILTER FEATURES BY DENMARK BOUNDARY
+# ===============================================================
+
+def filter_features_by_denmark(features):
+    """Filter features to only include points within Denmark"""
+    print("Filtering points within Denmark...")
+    filtered = []
+    
+    for f in features:
+        lon, lat = f["geometry"]["coordinates"]
+        point = Point(lon, lat)
+        
+        if dk_boundary.contains(point):
+            filtered.append(f)
+    
+    print(f"✓ Filtered: {len(filtered)} points inside Denmark (from {len(features)} total)")
+    return filtered
 
 
 # ===============================================================
@@ -162,6 +196,7 @@ def send_record(lon, lat, value, step, parameter_name):
         value=record,
         on_delivery=delivery_report
     )
+
 
 # ===============================================================
 # SEND RECORDS IN BATCHES (Memory Efficient)
@@ -199,7 +234,65 @@ def process_features_in_batches(features, batch_size=10000):
 
 
 # ===============================================================
-# MAIN LOOP (Updated)
+# FETCH AND PROCESS SINGLE DAY
+# ===============================================================
+
+def fetch_and_send_day(day_offset):
+    """Fetch data for a single day, filter it, and send to Kafka"""
+    today = datetime.now(timezone.utc).date()
+    target_date = today + timedelta(days=day_offset)
+    day_name = ["today", "tomorrow", "day after tomorrow"][day_offset] if day_offset < 3 else f"day +{day_offset}"
+    
+    # Set datetime range for the specific day
+    datetime_param = f"{target_date}T00:00:00Z/{target_date}T23:59:59Z"
+    
+    params = {
+        "bbox": "7.0,54.5,16.0,58.0",
+        "parameter-name": parameter,
+        "datetime": datetime_param,
+        "crs": "crs84",
+        "f": "GeoJSON",
+        "api-key": api_key
+    }
+    
+    print(f"\n{'='*60}")
+    print(f"Processing {day_name} ({target_date})")
+    print(f"{'='*60}")
+    
+    try:
+        # Fetch data
+        data = fetch_with_retry(api_url, params)
+        features = data.get("features", [])
+        print(f"✓ Fetched {len(features)} features for {day_name}")
+        
+        # Filter by Denmark boundary
+        filtered_features = filter_features_by_denmark(features)
+        
+        if len(filtered_features) == 0:
+            print(f"⚠ No data points inside Denmark for {day_name}")
+            return 0
+        
+        # Send to Kafka
+        print(f"Sending {day_name} data to Kafka...")
+        sent_count = process_features_in_batches(filtered_features, batch_size=10000)
+        print(f"✓ Successfully sent {sent_count} records for {day_name}")
+        
+        # Clear from memory
+        del data
+        del features
+        del filtered_features
+        
+        return sent_count
+        
+    except Exception as e:
+        print(f"✗ Failed to process {day_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
+# ===============================================================
+# MAIN LOOP
 # ===============================================================
 
 while True:
@@ -210,22 +303,19 @@ while True:
         print(f"Topic: {topic}")
         print("="*60)
 
-        data = fetch_with_retry(api_url, params)
-        features = data.get("features", [])
-        print(f"Fetched {len(features)} features from API")
-
-        # Process in batches to manage memory
-        print("Processing and sending records to Kafka in batches...")
-        sent_count = process_features_in_batches(features, batch_size=10000)
+        total_sent = 0
         
-        print(f"✓ Successfully sent {sent_count} records to Kafka topic '{topic}'")
+        # Process each day sequentially: fetch -> filter -> send
+        for day_offset in range(3):  # 0=today, 1=tomorrow, 2=day after tomorrow
+            sent_count = fetch_and_send_day(day_offset)
+            total_sent += sent_count
         
-        # Clear features from memory
-        del features
-        del data
+        print(f"\n{'='*60}")
+        print(f"✓ Cycle complete: {total_sent} total records sent to Kafka")
+        print(f"{'='*60}")
 
     except Exception as e:
-        print(f"✗ Error in main loop: {e}")
+        print(f"\n✗ Error in main loop: {e}")
         import traceback
         traceback.print_exc()
 
