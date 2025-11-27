@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-enricher
+  labels:
+    app: kafka-enricher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-enricher
+  template:
+    metadata:
+      labels:
+        app: kafka-enricher
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+        
+      containers:
+        - name: kafka-enricher
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher:latest
+          imagePullPolicy: Always
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:9092"
+            - name: WEATHER_SUN_TOPIC
+              value: "weather-sun"
+            - name: WEATHER_TEMP_TOPIC
+              value: "weather-temp"
+            - name: WEATHER_WIND_TOPIC
+              value: "weather-wind"
+            - name: OUTPUT_TOPIC
+              value: "weather-enriched"
+          ports:
+            - containerPort: 4040
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-enricher
+  labels:
+    app: kafka-enricher
+spec:
+  selector:
+    app: kafka-enricher
+  ports:
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  type: ClusterIP
