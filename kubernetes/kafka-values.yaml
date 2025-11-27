@@ -1,18 +1,25 @@
 # kafka-values.yaml
-# Use legacy Bitnami images
 image:
   registry: docker.io
   repository: bitnamilegacy/kafka
   tag: 3.9.0-debian-12-r1
 
-# Enable KRaft mode
 kraft:
   enabled: true
 
 controller:
   replicaCount: 3
   
-# Define listeners
+  # ADD THIS SECTION - Force custom resources
+  resourcesPreset: "none"  # Disable preset
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "1000m"
+    limits:
+      memory: "8Gi"
+      cpu: "2000m"
+  
 listeners:
   client:
     name: CLIENT
@@ -27,26 +34,13 @@ listeners:
     protocol: PLAINTEXT
     containerPort: 9093
 
-# Advertise listeners
 advertisedListeners: "CLIENT://kafka-g5-controller-$(POD_NAME).kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
 
-# Controller quorum
 controllerQuorumVoters: "0@kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,1@kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,2@kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093"
 
-# Resource limits
-resources:
-  requests:
-    memory: "2Gi"
-    cpu: "1000m"
-  limits:
-    memory: "4Gi"
-    cpu: "2000m"
-
-# Persistence
 persistence:
   enabled: true
   size: 8Gi
 
-# Replication settings
 defaultReplicationFactor: 3
 minInsyncReplicas: 2
