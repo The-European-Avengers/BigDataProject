@@ -237,7 +237,7 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 7️⃣ Hive Server Deployment
+# 7️⃣ Hive Server Deployment (CORREGIDO PARA SIDECAR)
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -254,11 +254,29 @@ spec:
       labels:
         app: hive-server
     spec:
+      imagePullSecrets:
+      - name: gitlab-registry
+      
       initContainers:
+      # Esperar a que el Metastore esté listo
       - name: wait-for-metastore
         image: busybox:1.35
         command: ['sh', '-c', 'until nc -z hive-metastore 9083; do echo waiting for metastore; sleep 2; done;']
+      
+      # 1. Contenedor de Python Collector (Sidecar)
       containers:
+      - name: wind-collector
+        # Usa la imagen que construiste (asumiendo que tiene Pandas y requests)
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/wind-collector:latest
+        command: ["python"]
+        # Corregido: Uso del nombre del script dmi_wind_collection_short.py
+        args: ["dmi_wind_collection_short.py"] 
+        volumeMounts:
+          # Monta el volumen COMPARTIDO en el path que Hive Server esperará
+          - name: shared-data-storage
+            mountPath: /shared-data-for-hive # Ruta idéntica a la de Hive
+
+      # 2. Contenedor Hive Server (Principal)
       - name: hive
         image: bde2020/hive:2.3.2-postgresql-metastore
         command: ['/opt/hive/bin/hive']
@@ -276,7 +294,15 @@ spec:
         volumeMounts:
           - name: hive-config
             mountPath: /opt/hive/conf
+          # Monta el volumen compartido. Hive puede leer el CSV aquí.
+          - name: shared-data-storage
+            mountPath: /shared-data-for-hive # Ruta idéntica a la del Collector
+
+      # 3. Definición de volúmenes
       volumes:
+        # Volumen compartido temporal (EmptyDir)
+        - name: shared-data-storage
+          emptyDir: {}
         - name: hive-config
           configMap:
             name: hadoop-config
