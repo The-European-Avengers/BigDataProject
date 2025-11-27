@@ -1,129 +1,67 @@
+# Finalized Guide: Hive Deployment and Initial CSV Load
 
-This guide walks you through deploying Hive on Kubernetes with an embedded PostgreSQL metastore and loading CSV data into HDFS.
+This guide outlines the final steps to deploy your complete Hive infrastructure on Kubernetes and perform the initial load of CSV data from the Python Collector Sidecar into HDFS, ready for Spark processing.
 
----
+## Phase 1: Deployment and Verification
 
-## Step 1 — Apply the Complete Hive Deployment YAML
+### Step 1 — Apply the Complete Deployment YAML
 
-Your single `hive-deployment.yaml` now includes:
-
-1. PostgreSQL PVC, Deployment, and Service  
-2. Hadoop & Hive ConfigMap  
-3. Hive Metastore Deployment & Service  
-4. Hive Server Deployment & Service  
-
-Apply the deployment:
-
-```bash
+Apply your hive-deployment.yaml file, which contains PostgreSQL, Hive Metastore, and the Hive Server Pod configured with the Python Collector Sidecar and the shared volume (/shared-data-for-hive).
+```
 kubectl apply -f hive-deployment.yaml
-````
+```
 
----
+### Step 2 — Verify Pods Are Running
 
-## Step 2 — Verify Pods Are Running
-
-Check that all pods in namespace `bd-bd-gr-05` are running:
-
-```bash
+Check the status of all Pods in your namespace. The hive-server Pod must eventually show 2/2 Running (Hive Server and Python Collector Sidecar).
+```
 kubectl get pods -n bd-bd-gr-05
 ```
 
-You should see:
+### Step 3 — Confirm Python Data Generation
 
-- `postgresql-*`
-    
-- `hive-metastore-*`
-    
-- `hive-server-*`
-    
+Monitor the logs of the wind-collector Sidecar to confirm it successfully connected to the API and generated the CSV file in the shared volume.
 
-> The initContainers will wait for PostgreSQL and the Metastore to become ready before starting the main containers.
+# Use -c wind-collector to view the Python script logs
+kubectl logs -n bd-bd-gr-05 deployment/hive-server -f -c wind-collector
 
----
 
-## Step 3 — Access Hive Shell
-
-Open a Hive shell inside the Hive Server pod:
-
-```bash
-kubectl exec -it deployment/hive-server -n bd-bd-gr-05 -- hive
+Expected Log Output:
 ```
-
-Verify Hive is running:
-
-```sql
-SHOW DATABASES;
-```
-
-Expected output:
-
-```
-hive> SHOW DATABASES;
-OK
-default
-Time taken: 0.737 seconds, Fetched: 1 row(s)
-```
-
----
-
-## Step 4 — Check the python script works
-
-
-
-```bash
-kubectl logs -n bd-bd-gr-05 deployment/hive-server -f
-```
-You have to get this:
-```
+...
+Summary: 55/57 stations have data
 Saved 42735 wind records to shared volume path: /shared-data-for-hive/2020_dmi_wind.csv
-Date range: 2020-01-01 00:00:00+00:00 to 2020-02-01 00:00:00+00:00
-Stations: 55
-Average mean_wind_speed: 6.42
-Max mean_wind_speed: 20.30
-Total time: 0:00:18.032063
+...
 Complete. DMI wind data saved to: /shared-data-for-hive/2020_dmi_wind.csv
 Clean data ready for Hive processing!
 ```
 
+## Phase 2: Data Transfer to HDFS
 
-### Step 4 — Verify CSV on Shared Volume (Nuevo)
-
-Verifica que el archivo CSV esté accesible en el sistema de archivos local del Pod, en el _path_ donde montamos el volumen compartido (`/shared-data-for-hive/`).
-
-**Salir de la shell de Hive (`!quit`) y ejecutar en Bash:**
-
-Bash
+### Step 4 — Access Hive Shell (Crucial Correction)
+Access the Hive shell by explicitly targeting the hive container.
 
 ```
-# Entrar al Bash del contenedor Hive
-kubectl exec -it deployment/hive-server -n bd-bd-gr-05 -c hive -- bash
-```
-```
-# Listar el contenido del volumen compartido
-ls -l /shared-data-for-hive
-```
-```
-# Resultado esperado:
-# -rw-r--r-- 1 root root [tamaño] [fecha] 2020_dmi_wind.csv
+kubectl exec -it deployment/hive-server -n bd-bd-gr-05 -c hive -- hive
 ```
 
----
-
-### Step 5 — Create Hive Database and Table (Adaptado)
-
-Vuelve a entrar a la _shell_ de Hive y ejecuta los comandos para preparar las tablas.
-
-**Comandos en Hive Shell (`hive>`):**
-
-SQL
-
+Verify Hive is running:
 ```
-CREATE DATABASE IF NOT EXISTS weather_data;
-USE weather_data;
-```
+SHOW DATABASES;
 ```
 
-CREATE EXTERNAL TABLE IF NOT EXISTS weather_data.wind_raw_data (
+### Step 5 — Create Hive Database and CSV Table
+
+Execute these commands in the Hive shell to create the database and the external table definition.
+
+This table uses STORED AS TEXTFILE and FIELDS TERMINATED BY ',' to preserve the original CSV format on HDFS, as required for Spark consumption.
+```
+CREATE DATABASE IF NOT EXISTS dmi_wind;
+USE dmi_wind;
+```
+```
+-- CREATE EXTERNAL TABLE: Reads the CSV data structure
+CREATE EXTERNAL TABLE IF NOT EXISTS dmi_wind.wind_raw_data (
   timeObserved STRING,
   stationId STRING,
   stationName STRING,
@@ -132,47 +70,40 @@ CREATE EXTERNAL TABLE IF NOT EXISTS weather_data.wind_raw_data (
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ',' 
 STORED AS TEXTFILE
-LOCATION 'hdfs://namenode-g5:9000/raw/initial/weather-wind'
-TBLPROPERTIES ('skip.header.line.count'='1'); 
+LOCATION 'hdfs://namenode-g5:9000/raw/initial/dmi-wind-csv' 
+TBLPROPERTIES ('skip.header.line.count'='1');
 ```
 
----
+### Step 6 — Load CSV into HDFS via Hive
 
-### Step 6 — Load CSV into HDFS via Hive (Corregido)
+Use the LOAD DATA LOCAL command to move the file from the Pod's local shared volume (EmptyDir) into the HDFS directory associated with the table.
 
-Carga el archivo desde el volumen compartido (local al Pod) hacia la ubicación HDFS definida en la tabla `wind_raw_data`.
-
-**Comando en Hive Shell (`hive>`):**
-
-SQL
+Command in Hive Shell (hive>):
 
 ```
-LOAD DATA LOCAL INPATH '/shared-data-for-hive/2020_dmi_wind.csv' INTO TABLE weather_data.wind_raw_data;
+LOAD DATA LOCAL INPATH '/shared-data-for-hive/2020_dmi_wind.csv' INTO TABLE dmi_wind.wind_raw_data;
 ```
 
-**Verify in Hive:**
+## Phase 3: Verification
 
-SQL
+### Step 7 — Verify Data Count in Hive
+Confirm that the data has been successfully loaded into the HDFS table (wind_raw_data).
 
-```
--- Verifica que los datos son legibles
-SELECT count(*) FROM weather_data.wind_raw_data;
-SELECT * FROM weather_data.wind_raw_data LIMIT 10;
-```
-
-**Verify in HDFS (Desde el contenedor Hive):**
-
-Sal de la _shell_ de Hive (`!quit`) y ejecuta en Bash:
-
-Bash
+Command in Hive Shell (hive>):
 
 ```
-hdfs dfs -ls /raw/initial/weather-wind
+SELECT count(*) FROM dmi_wind.wind_raw_data;
+SELECT * FROM dmi_wind.wind_raw_data LIMIT 10;
 ```
 
-**Resultado esperado:**
+(The count should match the number of records saved by the Python script, approx. 42735)
+
+### Step 8 — Verify CSV File in HDFS
+
+Exit the Hive shell (!quit) and use the hdfs dfs -ls command (from the Hive container's bash) to confirm the CSV file is physically present in the HDFS directory.
 
 ```
-Found 1 items
--rwxr-xr-x   3 root supergroup       [tamaño] [fecha] /raw/dmi_wind/csv/2020_dmi_wind.csv
+kubectl exec -it deployment/hive-server -n bd-bd-gr-05 -c hive -- hdfs dfs -ls /raw/initial/dmi-wind-csv
 ```
+
+Result: The listing should show the presence of the 2020_dmi_wind.csv file, confirming it is ready for your subsequent Spark job to transform it into Avro.
