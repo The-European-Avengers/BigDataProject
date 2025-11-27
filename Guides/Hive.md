@@ -1,4 +1,3 @@
-# Guide to set up Hive on Kubernetes
 
 This guide walks you through deploying Hive on Kubernetes with an embedded PostgreSQL metastore and loading CSV data into HDFS.
 
@@ -67,79 +66,113 @@ Time taken: 0.737 seconds, Fetched: 1 row(s)
 
 ---
 
-## Step 4 — Upload CSV to Hive Pod
+## Step 4 — Check the python script works
 
-Hive’s `LOAD DATA LOCAL` reads files inside the Hive pod filesystem. Copy your CSV:
+
 
 ```bash
-kubectl cp ./weather.csv bd-bd-gr-05/hive-server-<pod-id>:/tmp/weather.csv
+kubectl logs -n bd-bd-gr-05 deployment/hive-server -f
+```
+You have to get this:
+```
+Saved 42735 wind records to shared volume path: /shared-data-for-hive/2020_dmi_wind.csv
+Date range: 2020-01-01 00:00:00+00:00 to 2020-02-01 00:00:00+00:00
+Stations: 55
+Average mean_wind_speed: 6.42
+Max mean_wind_speed: 20.30
+Total time: 0:00:18.032063
+Complete. DMI wind data saved to: /shared-data-for-hive/2020_dmi_wind.csv
+Clean data ready for Hive processing!
+```
+
+
+### Step 4 — Verify CSV on Shared Volume (Nuevo)
+
+Verifica que el archivo CSV esté accesible en el sistema de archivos local del Pod, en el _path_ donde montamos el volumen compartido (`/shared-data-for-hive/`).
+
+**Salir de la shell de Hive (`!quit`) y ejecutar en Bash:**
+
+Bash
+
+```
+# Entrar al Bash del contenedor Hive
+kubectl exec -it deployment/hive-server -n bd-bd-gr-05 -c hive -- bash
+```
+```
+# Listar el contenido del volumen compartido
+ls -l /shared-data-for-hive
+```
+```
+# Resultado esperado:
+# -rw-r--r-- 1 root root [tamaño] [fecha] 2020_dmi_wind.csv
 ```
 
 ---
 
-## Step 5 — Create Hive Database and Table
+### Step 5 — Create Hive Database and Table (Adaptado)
 
-From the Hive shell:
+Vuelve a entrar a la _shell_ de Hive y ejecuta los comandos para preparar las tablas.
 
-```sql
-CREATE DATABASE IF NOT EXISTS weather;
+**Comandos en Hive Shell (`hive>`):**
 
-CREATE EXTERNAL TABLE IF NOT EXISTS weather.raw_data (
-  reading_date STRING,
-  hour INT,
-  from_time STRING,
-  to_time STRING,
-  station_id INT,
-  station_name STRING,
-  parameter STRING,
-  value DOUBLE,
-  latitude DOUBLE,
-  longitude DOUBLE
+SQL
+
+```
+CREATE DATABASE IF NOT EXISTS weather_data;
+USE weather_data;
+```
+```
+
+CREATE EXTERNAL TABLE IF NOT EXISTS weather_data.wind_raw_data (
+  timeObserved STRING,
+  stationId STRING,
+  stationName STRING,
+  mean_wind_speed DOUBLE
 )
 ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ';'
+FIELDS TERMINATED BY ',' 
 STORED AS TEXTFILE
-LOCATION '/raw/initial/';
+LOCATION 'hdfs://namenode-g5:9000/raw/initial/weather-wind'
+TBLPROPERTIES ('skip.header.line.count'='1'); 
 ```
-
-**Notes:**
-
-- `EXTERNAL` prevents Hive from taking full ownership of files.
-    
-- `LOCATION` explicitly ties the table to the directory in HDFS.
-    
 
 ---
 
-## Step 6 — Load CSV into HDFS via Hive
+### Step 6 — Load CSV into HDFS via Hive (Corregido)
 
-From the same Hive shell:
+Carga el archivo desde el volumen compartido (local al Pod) hacia la ubicación HDFS definida en la tabla `wind_raw_data`.
 
-```sql
-LOAD DATA LOCAL INPATH '/tmp/weather.csv' INTO TABLE weather.raw_data;
+**Comando en Hive Shell (`hive>`):**
+
+SQL
+
+```
+LOAD DATA LOCAL INPATH '/shared-data-for-hive/2020_dmi_wind.csv' INTO TABLE weather_data.wind_raw_data;
 ```
 
 **Verify in Hive:**
 
-```sql
-SELECT * FROM weather.raw_data LIMIT 10;
+SQL
+
+```
+-- Verifica que los datos son legibles
+SELECT count(*) FROM weather_data.wind_raw_data;
+SELECT * FROM weather_data.wind_raw_data LIMIT 10;
 ```
 
-**Verify in HDFS (from any HDFS-capable pod):**
+**Verify in HDFS (Desde el contenedor Hive):**
 
-```bash
-hdfs dfs -ls /raw/initial
+Sal de la _shell_ de Hive (`!quit`) y ejecuta en Bash:
+
+Bash
+
+```
+hdfs dfs -ls /raw/initial/weather-wind
 ```
 
-Example output:
+**Resultado esperado:**
 
 ```
 Found 1 items
--rwxr-xr-x   3 root supergroup       1147 2025-11-12 12:00 /raw/initial/weather.csv
-```
-
-Check content:
-
-```bash
-hdfs dfs -cat /raw/initial/weather.csv
+-rwxr-xr-x   3 root supergroup       [tamaño] [fecha] /raw/dmi_wind/csv/2020_dmi_wind.csv
 ```
