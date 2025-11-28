@@ -52,6 +52,10 @@ for raw_subdir in $RAW_SUBDIRS; do
     echo "  -> Creating $raw_subdir"
     hdfs dfs -mkdir -p "$raw_subdir"
 done
+
+hdfs dfs -mkdir -p /raw/initial/weather-wind
+hdfs dfs -mkdir -p /raw/initial/weather-temp
+hdfs dfs -mkdir -p /raw/initial/weather-sun
 echo "/raw structure completed."
 
 
