@@ -1,48 +1,53 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kafka-enricher
+  name: kafka-enricher-artem
+  namespace: bd-bd-gr-05
   labels:
-    app: kafka-enricher
+    app: kafka-enricher-artem
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kafka-enricher
+      app: kafka-enricher-artem
   template:
     metadata:
       labels:
-        app: kafka-enricher
+        app: kafka-enricher-artem
     spec:
       imagePullSecrets:
         - name: gitlab-registry
-        
+
       containers:
-        - name: kafka-enricher
-          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher:latest
+        - name: kafka-enricher-artem
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher-artem:latest
           imagePullPolicy: Always
           env:
-            - name: KAFKA_BOOTSTRAP_SERVERS
-              value: "kafka:9092"
-            - name: WEATHER_SUN_TOPIC
-              value: "weather-sun"
-            - name: WEATHER_TEMP_TOPIC
-              value: "weather-temp"
-            - name: WEATHER_WIND_TOPIC
-              value: "weather-wind"
-            - name: OUTPUT_TOPIC
-              value: "weather-enriched"
+            # 🔧 FIX: Use kafka-g5-controller-headless (same as producers)
+            # Alternative: You can also use "kafka-g5:9092" since both exist
+            - name: BOOTSTRAP_SERVERS
+              value: "kafka-g5-controller-headless:9092"
+            - name: SCHEMA_REGISTRY_URL
+              value: "http://schema-registry:8081"
+            # 🔧 Changed checkpoint path to v3 to start fresh
+            - name: CHECKPOINT_ROOT
+              value: "/tmp/spark/checkpoints/kafka_enricher_v3"
+            # 🔧 HDFS Configuration
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+            - name: HADOOP_CONF_fs_defaultFS
+              value: "hdfs://namenode-g5:9000"
           ports:
             - containerPort: 4040
           readinessProbe:
             exec:
               command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
-            initialDelaySeconds: 20
+            initialDelaySeconds: 30
             periodSeconds: 10
           livenessProbe:
             exec:
               command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 20
           resources:
             limits:
@@ -55,12 +60,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: kafka-enricher
+  name: kafka-enricher-artem
+  namespace: bd-bd-gr-05
   labels:
-    app: kafka-enricher
+    app: kafka-enricher-artem
 spec:
   selector:
-    app: kafka-enricher
+    app: kafka-enricher-artem
   ports:
     - name: spark-ui
       port: 4040

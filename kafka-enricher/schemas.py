@@ -1,6 +1,5 @@
 # schemas.py
-# Avro schema strings for enriched output topics.
-# These schemas match the outgoing enriched record structure.
+# Avro schemas for enriched weather data output
 
 WIND_ENRICHED_SCHEMA = """
 {
@@ -12,6 +11,7 @@ WIND_ENRICHED_SCHEMA = """
     {"name": "lat", "type": "double"},
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string"},
     {"name": "DkArea", "type": ["null", "string"], "default": null},
     {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
   ]
@@ -28,6 +28,7 @@ TEMP_ENRICHED_SCHEMA = """
     {"name": "lat", "type": "double"},
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string"},
     {"name": "DkArea", "type": ["null", "string"], "default": null},
     {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
   ]
@@ -44,6 +45,7 @@ SUN_ENRICHED_SCHEMA = """
     {"name": "lat", "type": "double"},
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string"},
     {"name": "DkArea", "type": ["null", "string"], "default": null},
     {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
   ]

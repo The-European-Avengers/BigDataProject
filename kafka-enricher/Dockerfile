@@ -16,12 +16,13 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 ENV SPARK_VERSION=3.4.1
 ENV SPARK_HOME=/opt/spark
 ENV PATH="${SPARK_HOME}/bin:${PATH}"
-ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.zip:${PYTHONPATH}"
 
 RUN wget -q "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz" && \
     tar xzf "spark-${SPARK_VERSION}-bin-hadoop3.tgz" && \
     mv "spark-${SPARK_VERSION}-bin-hadoop3" /opt/spark && \
     rm "spark-${SPARK_VERSION}-bin-hadoop3.tgz"
+
+ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.zip"
 
 # Create application directory and user
 RUN useradd -m -u 1001 sparkuser && \
@@ -44,6 +45,9 @@ RUN pip install --no-cache-dir -r /home/sparkuser/requirements.txt
 # Make entrypoint executable
 RUN chmod +x /home/sparkuser/entrypoint.sh
 
+# Create data directory (even if CSV is not present)
+RUN mkdir -p /home/sparkuser/data
+
 # Set working directory
 WORKDIR /home/sparkuser
 
@@ -51,7 +55,7 @@ WORKDIR /home/sparkuser
 USER sparkuser
 
 # Set environment variables with defaults
-ENV BOOTSTRAP_SERVERS=kafka:9092
+ENV BOOTSTRAP_SERVERS=kafka-g5:9092
 ENV SCHEMA_REGISTRY_URL=http://schema-registry:8081
 ENV CHECKPOINT_ROOT=/tmp/spark/checkpoints/kafka_enricher
 ENV TRIGGER_INTERVAL="10 seconds"
