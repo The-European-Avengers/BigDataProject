@@ -227,7 +227,14 @@ def main():
         .getOrCreate()
     )
 
-    spark.sparkContext.setLogLevel("WARN")
+    # 🔇 SUPPRESS KAFKA WARNINGS
+    spark.sparkContext.setLogLevel("ERROR")  # Changed from WARN to ERROR
+
+    # Suppress specific Kafka and Spark streaming warnings
+    import logging
+    logging.getLogger("org.apache.kafka").setLevel(logging.ERROR)
+    logging.getLogger("org.apache.spark.sql.kafka010").setLevel(logging.ERROR)
+    logging.getLogger("org.apache.spark.sql.execution.streaming").setLevel(logging.ERROR)
 
     # Init Lookup
     if os.path.exists(municipality_csv_path):
