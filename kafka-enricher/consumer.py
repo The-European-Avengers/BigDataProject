@@ -1,9 +1,7 @@
-# consumer.py
 import os
 import threading
 import time
 import traceback
-import json
 import requests
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -11,7 +9,6 @@ from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import StringSerializer, SerializationContext, MessageField
 
 from pyspark.sql import SparkSession
-# ✅ FIXED IMPORTS
 from pyspark.sql.functions import col, expr
 from pyspark.sql.avro.functions import from_avro
 
@@ -106,7 +103,7 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
     )
 
     # 4. Deserialize & Enrich Logic
-    # 🔧 CRITICAL FIX: Skip the first 5 bytes (Confluent Magic Byte + Schema ID)
+    # CRITICAL FIX: Skip the first 5 bytes (Confluent Magic Byte + Schema ID)
     # Using expr("substring(value, 6)") converts the binary data to exclude the header
     # Also added mode=PERMISSIVE to prevent crashing on bad records
     parsed = df.select(
@@ -132,8 +129,8 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
 
     enriched_df = (
         flat
-        .withColumn("DkArea", add_dk_area_udf(col("lon")))
-        .withColumn("MunicipalityCode", add_municipality_code_udf(col("lat"), col("lon")))
+        .withColumn("dkArea", add_dk_area_udf(col("lon")))
+        .withColumn("municipalityCode", add_municipality_code_udf(col("lat"), col("lon")))
     )
 
     # Prepare Serializer for this topic

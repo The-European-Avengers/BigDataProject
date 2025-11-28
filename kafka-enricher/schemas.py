@@ -12,8 +12,8 @@ WIND_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
-    {"name": "DkArea", "type": ["null", "string"], "default": null},
-    {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
+    {"name": "dkArea", "type": "int"},
+    {"name": "municipalityCode", "type": "int"}
   ]
 }
 """
@@ -29,8 +29,8 @@ TEMP_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
-    {"name": "DkArea", "type": ["null", "string"], "default": null},
-    {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
+    {"name": "dkArea", "type": "int"},
+    {"name": "municipalityCode", "type": "int"}
   ]
 }
 """
@@ -46,8 +46,8 @@ SUN_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
-    {"name": "DkArea", "type": ["null", "string"], "default": null},
-    {"name": "MunicipalityCode", "type": ["null", "string"], "default": null}
+    {"name": "dkArea", "type": "int"},
+    {"name": "municipalityCode", "type": "int"}
   ]
 }
 """
