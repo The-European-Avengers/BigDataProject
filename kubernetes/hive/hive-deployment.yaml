@@ -265,12 +265,10 @@ spec:
       
       # 1. Contenedor de Python Collector (Sidecar)
       containers:
-      - name: wind-collector
-        # Usa la imagen que construiste (asumiendo que tiene Pandas y requests)
-        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/wind-collector:latest
-        command: ["python"]
-        # Corregido: Uso del nombre del script dmi_wind_collection_short.py
-        args: ["dmi_wind_collection_short.py"] 
+      - name: initial-load
+        # Runs all three data collection scripts via orchestrator
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/initial-load:latest
+        # No command/args needed - uses Dockerfile's CMD to run run_all_collections.py
         volumeMounts:
           # Monta el volumen COMPARTIDO en el path que Hive Server esperará
           - name: shared-data-storage

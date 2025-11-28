@@ -1,15 +1,33 @@
+#!/usr/bin/env python3
+"""
+Private Heating Consumption Collection
+Collects heating consumption data from Danish Energy Data Service API
+Clean data with no empty values - perfect for analysis and streaming
+"""
+
 import requests
 import csv
 import sys
+import os
 from datetime import datetime
 
-
+# CONFIGURATION
 START_YEAR = 2022  # Start from 2022 (data begins September 2022)
 END_YEAR = 2025    # Go up to 2025 to get the latest data
-DESKTOP_PATH = "/Users/asn-mac/Desktop"
-COMBINED_OUTPUT_FILE = f"{DESKTOP_PATH}/private_heating_consumption_2022-2025_combined.csv"
+
+# RUTA COMPARTIDA: Debe coincidir con el 'mountPath' en el contenedor HIVE y Collector (YAML)
+SHARED_DATA_PATH = "/shared-data-for-hive"
+
+COMBINED_OUTPUT_FILE = f"{SHARED_DATA_PATH}/private_heating_consumption_2022-2025_combined.csv"
 
 BASE_URL = "https://api.energidataservice.dk/dataset/PrivateConsumptionHeatingHour"
+
+
+def setup_directories():
+    """Create shared data directory if it doesn't exist."""
+    if not os.path.exists(SHARED_DATA_PATH):
+        os.makedirs(SHARED_DATA_PATH)
+        print(f"[INFO] Created shared data directory: {SHARED_DATA_PATH}")
 
 
 def fetch_month_data(year, month):
@@ -90,8 +108,8 @@ def fetch_all_years_combined():
             month_records = fetch_month_data(year, month)
             
             if month_records:
-                # Save individual month file
-                month_filename = f"{DESKTOP_PATH}/heating_consumption_{year}_{month:02d}.csv"
+                # Save individual month file to shared volume
+                month_filename = f"{SHARED_DATA_PATH}/heating_consumption_{year}_{month:02d}.csv"
                 save_to_csv(month_records, month_filename)
                 print(f"[INFO] Saved month {year}-{month:02d} to {month_filename}")
                 
@@ -129,12 +147,29 @@ def save_to_csv(records, filename):
 
 
 def main():
+    """Main function."""
+    print("Private Heating Consumption Collection")
+    print(f"Year range: {START_YEAR} to {END_YEAR}")
+    
+    setup_directories()
+    
     try:
+        # Check if combined file exists
+        if os.path.exists(COMBINED_OUTPUT_FILE):
+            print(f"[INFO] Combined file already exists: {COMBINED_OUTPUT_FILE}")
+            user_input = input("[INPUT] Remove and recreate? (y/n): ").lower()
+            if user_input == 'y':
+                os.remove(COMBINED_OUTPUT_FILE)
+                print("[INFO] Removed existing combined file.")
+            else:
+                print("[INFO] Keeping existing file. Exiting.")
+                sys.exit(0)
+        
         # Fetch all years combined
         all_records = fetch_all_years_combined()
         
         if all_records:
-            # Save the massive combined file
+            # Save the massive combined file to shared volume
             save_to_csv(all_records, COMBINED_OUTPUT_FILE)
             print(f"\n[SUCCESS] Saved complete combined dataset to {COMBINED_OUTPUT_FILE}")
             print(f"[SUCCESS] Total records spanning {START_YEAR}-{END_YEAR}: {len(all_records):,}")
@@ -146,6 +181,7 @@ def main():
             print("[WARNING] No data found for any months!")
         
         print("\n[DONE] Finished combined download!")
+        print("Clean data ready for Hive processing!")
         
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] API error: {e}")

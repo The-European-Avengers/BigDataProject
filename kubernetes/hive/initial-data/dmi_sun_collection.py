@@ -11,18 +11,14 @@ import time
 import os
 from datetime import datetime
 
-# Multi-year range defaults (overridable via env vars)
-START_YEAR = int(os.environ.get("DMI_START_YEAR", "2020"))
-END_YEAR = int(os.environ.get("DMI_END_YEAR", str(datetime.utcnow().year)))
-OVERWRITE = os.environ.get("DMI_OVERWRITE", "1").lower() in {"1", "true", "yes", "y"}
+# CONFIGURATION
+TARGET_YEARS = [2020, 2021, 2022, 2023, 2024]  # Years to collect data for
+
+# RUTA COMPARTIDA: Debe coincidir con el 'mountPath' en el contenedor HIVE y Collector (YAML)
+SHARED_DATA_PATH = "/shared-data-for-hive" 
 
 API_KEY = "d36196e2-2a58-4497-bf28-f71d18c427a1"
 BASE_URL = "https://dmigw.govcloud.dk/v2/climateData/collections/stationValue/items"
-
-# Output directory for CSV files (can be overridden with env var DMI_OUTPUT_DIR)
-# Default to the repo's dmi/datasets folder relative to this script to avoid hard-coded absolute paths
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-OUTPUT_DIR = os.environ.get("DMI_OUTPUT_DIR", os.path.join(BASE_DIR, "datasets"))
 
 def get_mean_radiation_stations(year: int) -> dict:
     """Discover all stations that have mean_radiation observations for the given year,
@@ -77,13 +73,13 @@ def get_mean_radiation_stations(year: int) -> dict:
         raise
 
 def setup_directories():
-    """Create output directory if it doesn't exist."""
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        print(f"Created output directory: {OUTPUT_DIR}")
+    """Create shared data directory if it doesn't exist."""
+    if not os.path.exists(SHARED_DATA_PATH):
+        os.makedirs(SHARED_DATA_PATH)
+        print(f"Created shared data directory: {SHARED_DATA_PATH}")
 
 def fetch_station_month(station_id, year, month):
-    """Fetch mean radiation data for one station for one month."""
+    """Fetch mean sun data for one station for one month."""
     start_date = f"{year}-{month:02d}-01T00:00:00Z"
     if month == 12:
         end_date = f"{year+1}-01-01T00:00:00Z"
@@ -118,7 +114,7 @@ def fetch_station_month(station_id, year, month):
         print(f"  -> Network error: {e}")
         return []
 
-def collect_sunshine_data(year):
+def collect_radiation_data(year):
     """Collect mean radiation data for one year from all radiation-capable stations."""
     print(f"Collecting mean_radiation data for {year}")
     stations = get_mean_radiation_stations(year)
@@ -167,14 +163,13 @@ def collect_sunshine_data(year):
     return all_data
 
 def save_data(data, year):
-    """Save collected mean radiation data to CSV."""
+    """Save collected mean radiation data to CSV in the shared volume."""
     if not data:
         print(f"No data collected for {year}")
         return None
     
     df = pd.DataFrame(data)
-    # Use utc=True to avoid mixed timezone parsing warnings and ensure consistent tz-aware datetimes
-    df["timeObserved"] = pd.to_datetime(df["timeObserved"], format='ISO8601', utc=True)
+    df["timeObserved"] = pd.to_datetime(df["timeObserved"], format="ISO8601")
     df = df.sort_values(["stationId", "timeObserved"])
     
     # Remove any rows where mean_radiation is null (extra safety)
@@ -185,10 +180,11 @@ def save_data(data, year):
     if original_count != cleaned_count:
         print(f"Cleaned {original_count - cleaned_count} null radiation records")
     
-    filename = os.path.join(OUTPUT_DIR, f"{year}_dmi_radiation.csv")
+    # Escribe el archivo en la ruta del volumen compartido
+    filename = f"{SHARED_DATA_PATH}/{year}_dmi_sun.csv"
     df.to_csv(filename, index=False)
     
-    print(f"\nSaved {len(df)} radiation records to {filename}")
+    print(f"\nSaved {len(df)} sun records to shared volume path: {filename}")
     print(f"Date range: {df['timeObserved'].min()} to {df['timeObserved'].max()}")
     print(f"Stations: {df['stationId'].nunique()}")
     print(f"Average mean_radiation: {df['mean_radiation'].mean():.2f}")
@@ -198,44 +194,39 @@ def save_data(data, year):
 
 def main():
     """Main function."""
-    print("DMI Radiation Collection")
-    print(f"Year range: {START_YEAR}..{END_YEAR} (overwrite={'on' if OVERWRITE else 'off'})")
+    print("DMI Sun Collection")
+    print(f"Target Years: {', '.join(map(str, TARGET_YEARS))}")
 
     setup_directories()
 
-    total_start = datetime.now()
-    for year in range(START_YEAR, END_YEAR + 1):
+    for TARGET_YEAR in TARGET_YEARS:
         print("\n" + "="*80)
-        print(f"Processing year {year}")
+        print(f"Processing year {TARGET_YEAR}")
 
-        filename = os.path.join(OUTPUT_DIR, f"{year}_dmi_radiation.csv")
+        # Usar la nueva ruta de archivo para verificar la existencia
+        filename = f"{SHARED_DATA_PATH}/{TARGET_YEAR}_dmi_sun.csv"
         if os.path.exists(filename):
-            if OVERWRITE:
-                os.remove(filename)
-                print(f"Removed existing file: {filename}")
-            else:
-                print(f"File exists, skipping year {year}: {filename}")
-                continue
+            print(f"File {filename} already exists in shared volume!")
+            os.remove(filename)
+            print("Removed existing file.")
 
         year_start = datetime.now()
 
         # Collect mean radiation data for this year
         try:
-            sunshine_data = collect_sunshine_data(year)
+            radiation_data = collect_radiation_data(TARGET_YEAR)
         except Exception as e:
-            print(f"Error during collection for {year}: {e}")
+            print(f"Error during collection for {TARGET_YEAR}: {e}")
             continue
 
         # Save to CSV
-        output_file = save_data(sunshine_data, year)
+        output_file = save_data(radiation_data, TARGET_YEAR)
 
         year_end = datetime.now()
-        print(f"Time for {year}: {year_end - year_start}")
+        print(f"Time for {TARGET_YEAR}: {year_end - year_start}")
 
-    total_end = datetime.now()
     print("\nAll done.")
-    print(f"Total elapsed: {total_end - total_start}")
-    print("Clean data ready for analysis and Kafka streaming!")
+    print("Clean data ready for Hive processing!")
 
 if __name__ == "__main__":
     main()

@@ -132,6 +132,8 @@ main() {
     execute_hive_command "$create_sql"
     log_info "✓ Database '${DATABASE_NAME}' and table '${TABLE_NAME}' created"
     echo ""
+    echo "LOCATION: ${HDFS_LOCATION}"
+    echo ""
     
     # Load CSV into HDFS
     log_info "Step 5: Loading CSV data into HDFS..."
