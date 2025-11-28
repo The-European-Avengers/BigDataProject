@@ -73,7 +73,42 @@ kubectl logs -f -l app=kafka-enricher-artem -n bd-bd-gr-05
 ---
 
 
+## Verification - Confirm Pipeline is Working
 
+### Verify Enriched Kafka Topics
+
+```bash
+# List all Kafka topics
+kubectl exec -it kafka-g5-controller-0 -n bd-bd-gr-05 -- \
+  kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# Should see both input and enriched topics:
+# weather-wind
+# weather-temp
+# weather-sun
+# weather-wind-enriched    ← Enricher output
+# weather-temp-enriched    ← Enricher output
+# weather-sun-enriched     ← Enricher output
+```
+
+### Verify HDFS Output
+
+```bash
+# Check HDFS directories exist
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
+  hdfs dfs -ls /raw/forecast
+
+
+# Count files in each directory
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
+  hdfs dfs -count /raw/forecast/wind
+  (files)           (bytes)
+
+# List files
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
+  hdfs dfs -ls /raw/forecast/wind | head -10
+
+```
 ---
 
 ## Important Notes

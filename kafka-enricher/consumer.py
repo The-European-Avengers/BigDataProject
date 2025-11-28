@@ -96,7 +96,7 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         .option("subscribe", topic)
         .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
-        .option("maxOffsetsPerTrigger", "500")  # Keep conservative limit
+        .option("maxOffsetsPerTrigger", "100000")  # Keep conservative limit
         .option("kafka.request.timeout.ms", "60000")
         .option("kafka.session.timeout.ms", "30000")
         .load()
