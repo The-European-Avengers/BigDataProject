@@ -14,7 +14,7 @@ SHARED_DATA_PATH="/shared-data-for-hive"
 CSV_FILE="2020_dmi_wind.csv"
 DATABASE_NAME="dmi_wind"
 TABLE_NAME="wind_raw_data"
-HDFS_LOCATION="hdfs://namenode-g5:9000/raw/initial/dmi-wind-csv"
+HDFS_LOCATION="hdfs://namenode-g5:9000/raw/initial/weather-wind"
 
 # Colors for output
 RED='\033[0;31m'
@@ -88,8 +88,15 @@ main() {
     log_info "Step 2: Verifying CSV file exists..."
     if ! check_csv_exists; then
         log_error "Cannot proceed without CSV file"
+        log_info "Checking collector container logs..."
+        kubectl logs -n $NAMESPACE deployment/$HIVE_DEPLOYMENT -c wind-collector --tail=30
         exit 1
     fi
+    
+    # Show file details
+    log_info "CSV file details:"
+    kubectl exec -n $NAMESPACE deployment/$HIVE_DEPLOYMENT -c $HIVE_CONTAINER -- \
+        ls -lh "$SHARED_DATA_PATH/$CSV_FILE"
     echo ""
     
     # Test Hive access
@@ -129,13 +136,29 @@ main() {
     # Load CSV into HDFS
     log_info "Step 5: Loading CSV data into HDFS..."
     
+    # First check if file is accessible from Hive's perspective
+    log_info "Verifying file accessibility from Hive container..."
+    kubectl exec -n $NAMESPACE deployment/$HIVE_DEPLOYMENT -c $HIVE_CONTAINER -- \
+        ls -la "$SHARED_DATA_PATH/" || {
+            log_error "Cannot access shared data path from Hive container"
+            log_info "Listing root shared path:"
+            kubectl exec -n $NAMESPACE deployment/$HIVE_DEPLOYMENT -c $HIVE_CONTAINER -- ls -la /shared-data-for-hive/ || true
+            exit 1
+        }
+    
     local load_sql="
     USE ${DATABASE_NAME};
     LOAD DATA LOCAL INPATH '${SHARED_DATA_PATH}/${CSV_FILE}' INTO TABLE ${DATABASE_NAME}.${TABLE_NAME};
     "
     
-    execute_hive_command "$load_sql"
-    log_info "✓ Data loaded into HDFS"
+    if execute_hive_command "$load_sql"; then
+        log_info "✓ Data loaded into HDFS"
+    else
+        log_error "Failed to load data. Checking if file still exists..."
+        kubectl exec -n $NAMESPACE deployment/$HIVE_DEPLOYMENT -c $HIVE_CONTAINER -- \
+            ls -la "$SHARED_DATA_PATH/" || true
+        exit 1
+    fi
     echo ""
     
     # Verify data count
