@@ -201,7 +201,8 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 │   ├── initial-load
 │   │   ├── weather-wind
 │   │   ├── weather-temp
-│   │   └── weather-sun
+│   │   ├── weather-sun
+│   │   └── heating-consumption
 │   ├── forecast
 │   │   ├── weather-wind
 │   │   ├── weather-temp
