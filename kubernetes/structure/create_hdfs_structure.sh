@@ -10,7 +10,7 @@ YEARS=$(seq 2020 2024)
 TOPICS="weather-wind weather-temp weather-sun"
 
 # Define the initial structure under /raw (based on the final tree overview)
-RAW_SUBDIRS="/raw/initial /raw/forecast/weather-wind /raw/forecast/weather-temp /raw/forecast/weather-sun /raw/price /raw/historical/weather-wind /raw/historical/weather-temp /raw/historical/weather-sun"
+RAW_SUBDIRS="/raw/initial-load /raw/forecast/weather-wind /raw/forecast/weather-temp /raw/forecast/weather-sun /raw/price /raw/historical/weather-wind /raw/historical/weather-temp /raw/historical/weather-sun"
 
 echo "Starting creation of HDFS directory structure..."
 
@@ -53,9 +53,9 @@ for raw_subdir in $RAW_SUBDIRS; do
     hdfs dfs -mkdir -p "$raw_subdir"
 done
 
-hdfs dfs -mkdir -p /raw/initial/weather-wind
-hdfs dfs -mkdir -p /raw/initial/weather-temp
-hdfs dfs -mkdir -p /raw/initial/weather-sun
+hdfs dfs -mkdir -p /raw/initial-load/weather-wind
+hdfs dfs -mkdir -p /raw/initial-load/weather-temp
+hdfs dfs -mkdir -p /raw/initial-load/weather-sun
 echo "/raw structure completed."
 
 
