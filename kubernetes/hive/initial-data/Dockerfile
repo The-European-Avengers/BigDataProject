@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all data collection scripts
 COPY dmi_wind_collection.py .
 COPY dmi_sun_collection.py .
+COPy dmi_temp_collection.py .
 COPY Combined_Heating_Data_2022-2025.py .
 COPY run_all_collections.py .
 

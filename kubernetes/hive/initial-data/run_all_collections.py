@@ -12,6 +12,7 @@ from datetime import datetime
 SCRIPTS = [
     ("DMI Wind Data", "dmi_wind_collection.py"),
     ("DMI Sun Data", "dmi_sun_collection.py"),
+    ("DMI Temperature Data", "dmi_temp_collection.py"),
     ("Heating Consumption Data", "Combined_Heating_Data_2022-2025.py"),
 ]
 
