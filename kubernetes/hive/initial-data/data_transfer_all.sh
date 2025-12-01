@@ -94,7 +94,7 @@ load_files_to_table() {
 setup_wind_data() {
     local database="dmi_wind"
     local table="wind_raw_data"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial/weather-wind"
+    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-wind"
     
     log_step "Setting up DMI Wind Data..."
     
@@ -128,12 +128,50 @@ setup_wind_data() {
     log_info "✓ Total wind records: $count"
     echo ""
 }
+# Temp Data Configuration
+setup_temp_data() {
+    local database="dmi_temp"
+    local table="temp_raw_data"
+    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-temp"
+    
+    log_step "Setting up DMI Temp Data..."
+    
+    local create_sql="
+    CREATE DATABASE IF NOT EXISTS ${database};
+    USE ${database};
+    
+    CREATE EXTERNAL TABLE IF NOT EXISTS ${database}.${table} (
+      timeObserved STRING,
+      stationId STRING,
+      stationName STRING,
+      mean_temp DOUBLE
+    )
+    ROW FORMAT DELIMITED
+    FIELDS TERMINATED BY ','
+    STORED AS TEXTFILE
+    LOCATION '${hdfs_location}'
+    TBLPROPERTIES ('skip.header.line.count'='1');
+    "
+    
+    execute_hive_command "$create_sql"
+    log_info "✓ Created database and table: ${database}.${table}"
+    
+    # Load all temp CSV files (pattern: *_dmi_temp.csv)
+    log_info "Loading temp CSV files..."
+    load_files_to_table "$database" "$table" "_dmi_temp.csv"
+    
+    # Verify
+    log_info "Verifying data count..."
+    local count=$(execute_hive_command "USE ${database}; SELECT COUNT(*) FROM ${table};" | tail -1)
+    log_info "✓ Total temp records: $count"
+    echo ""
+}
 
 # Sun Data Configuration
 setup_sun_data() {
     local database="dmi_sun"
     local table="sun_raw_data"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial/weather-sun"
+    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-sun"
     
     log_step "Setting up DMI Sun Data..."
     
@@ -172,7 +210,7 @@ setup_sun_data() {
 setup_heating_data() {
     local database="energy_heating"
     local table="heating_consumption_raw"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial/heating-consumption"
+    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
     
     log_step "Setting up Heating Consumption Data..."
     
@@ -258,9 +296,10 @@ main() {
     echo ""
     
     # Setup each data type
-    # setup_wind_data
+    setup_wind_data
+    setup_temp_data
     setup_sun_data
-    # setup_heating_data
+    setup_heating_data
     
     # Final summary
     log_info "============================================"
@@ -269,19 +308,21 @@ main() {
     echo ""
     
     log_info "Available databases:"
-    execute_hive_command "SHOW DATABASES;" | grep -E "dmi_wind|dmi_radiation|energy_heating" || true
+    execute_hive_command "SHOW DATABASES;" | grep -E "dmi_wind|dmi_temp|dmi_sun|energy_heating" || true
     echo ""
     
     log_info "Tables created:"
     echo "  1. dmi_wind.wind_raw_data"
-    echo "  2. dmi_radiation.radiation_raw_data"
-    echo "  3. energy_heating.heating_consumption_raw"
+    echo "  2. dmi_temp.temp_raw_data"
+    echo "  3. dmi_sun.sun_raw_data"
+    echo "  4. energy_heating.heating_consumption_raw"
     echo ""
     
     log_info "HDFS locations:"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial/weather-wind"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial/weather-sun"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial/heating-consumption"
+    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-wind"
+    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-temp"
+    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-sun"
+    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
     echo ""
     
     log_info "============================================"
