@@ -70,9 +70,9 @@ def fetch_station_month(station_id, year, month):
         if response.status_code == 200:
             data = response.json()
             features = data.get("features", [])
-            if len(features) > 0:
-                print(f"  -> {len(features)} records")
-            else:
+            if len(features) < 0:
+                # print(f"  -> {len(features)} records")
+            # else:
                 print(f"  -> No data available")
             return features
         else:
@@ -91,7 +91,7 @@ def collect_wind_data(year):
     stations_with_data = 0
     
     for station_id, station_name in WIND_STATIONS.items():
-        print(f"\nProcessing {station_name} ({station_id})")
+        print(f"\nProcessing {station_name} ({station_id}), wind data")
         station_has_data = False
         
         for month in range(1, 13):

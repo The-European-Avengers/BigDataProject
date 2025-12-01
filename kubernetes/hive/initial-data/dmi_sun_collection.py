@@ -102,9 +102,9 @@ def fetch_station_month(station_id, year, month):
         if response.status_code == 200:
             data = response.json()
             features = data.get("features", [])
-            if len(features) > 0:
-                print(f"  -> {len(features)} records")
-            else:
+            if len(features) < 0:
+                # print(f"  -> {len(features)} records")
+            # else:
                 print(f"  -> No data available")
             return features
         else:
@@ -130,7 +130,7 @@ def collect_radiation_data(year):
     last_month = 12 if year < now.year else now.month
 
     for station_id, station_name in stations.items():
-        print(f"\nProcessing {station_name} ({station_id})")
+        print(f"\nProcessing {station_name} ({station_id}), sun data")
         station_has_data = False
 
         for month in range(1, last_month + 1):
