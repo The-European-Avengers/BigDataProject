@@ -95,7 +95,7 @@ def fetch_station_month(station_id, year, month):
     
     headers = {"X-Gravitee-Api-Key": API_KEY}
     
-    print(f"Calling API: {station_id} mean_temp {year}-{month:02d}")
+    # print(f"Calling API: {station_id} mean_temp {year}-{month:02d}")
     
     try:
         response = requests.get(BASE_URL, params=params, headers=headers)
@@ -204,7 +204,7 @@ def main():
         print(f"Processing year {TARGET_YEAR}")
 
         # Usar la nueva ruta de archivo para verificar la existencia
-        filename = f"{SHARED_DATA_PATH}/{TARGET_YEAR}_dmi_sun.csv"
+        filename = f"{SHARED_DATA_PATH}/{TARGET_YEAR}_dmi_temp.csv"
         if os.path.exists(filename):
             print(f"File {filename} already exists in shared volume!")
             os.remove(filename)

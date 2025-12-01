@@ -63,7 +63,7 @@ def fetch_station_month(station_id, year, month):
     
     headers = {"X-Gravitee-Api-Key": API_KEY}
     
-    print(f"Calling API: {station_id} wind {year}-{month:02d}")
+    # print(f"Calling API: {station_id} wind {year}-{month:02d}")
     
     try:
         response = requests.get(BASE_URL, params=params, headers=headers)
