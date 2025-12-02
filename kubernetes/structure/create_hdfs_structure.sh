@@ -56,7 +56,7 @@ done
 hdfs dfs -mkdir -p /raw/initial-load/weather-wind
 hdfs dfs -mkdir -p /raw/initial-load/weather-temp
 hdfs dfs -mkdir -p /raw/initial-load/weather-sun
-hdfs dfs -mkdir -p /raw/initial-load/heating-consumption
+hdfs dfs -mkdir -p /raw/initial-load/consumption
 echo "/raw structure completed."
 
 

@@ -2,7 +2,7 @@
 
 # ============================================================================
 # Automated Hive Data Transfer to HDFS Script - ALL DATA TYPES
-# Handles: Wind, Radiation, and Heating Consumption Data
+# Handles: Wind, Radiation, and Consumption Data
 # ============================================================================
 
 set -e  # Exit on any error
@@ -206,13 +206,13 @@ setup_sun_data() {
     echo ""
 }
 
-# Heating Consumption Data Configuration
-setup_heating_data() {
-    local database="energy_heating"
-    local table="heating_consumption_raw"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
+# Consumption Data Configuration
+setup_consumption_data() {
+    local database="energy_consumption"
+    local table="consumption_raw_data"
+    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/consumption"
     
-    log_step "Setting up Heating Consumption Data..."
+    log_step "Setting up Consumption Data..."
     
     local create_sql="
     CREATE DATABASE IF NOT EXISTS ${database};
@@ -238,18 +238,18 @@ setup_heating_data() {
     execute_hive_command "$create_sql"
     log_info "✓ Created database and table: ${database}.${table}"
     
-    # Load all heating CSV files (pattern: heating_consumption_*.csv)
-    log_info "Loading heating consumption CSV files..."
-    load_files_to_table "$database" "$table" "heating_consumption_"
+    # Load all consumption CSV files (pattern: consumption_*.csv)
+    log_info "Loading consumption CSV files..."
+    load_files_to_table "$database" "$table" "consumption_"
     
     # Also load the combined file if it exists
-    log_info "Loading combined heating file if present..."
-    load_files_to_table "$database" "$table" "private_heating_consumption_" || true
+    log_info "Loading combined consumption file if present..."
+    load_files_to_table "$database" "$table" "private_consumption_" || true
     
     # Verify
     log_info "Verifying data count..."
     local count=$(execute_hive_command "USE ${database}; SELECT COUNT(*) FROM ${table};" | tail -1)
-    log_info "✓ Total heating records: $count"
+    log_info "✓ Total consumption records: $count"
     echo ""
 }
 
@@ -299,7 +299,7 @@ main() {
     setup_wind_data
     setup_temp_data
     setup_sun_data
-    setup_heating_data
+    setup_consumption_data
     
     # Final summary
     log_info "============================================"
@@ -308,21 +308,21 @@ main() {
     echo ""
     
     log_info "Available databases:"
-    execute_hive_command "SHOW DATABASES;" | grep -E "dmi_wind|dmi_temp|dmi_sun|energy_heating" || true
+    execute_hive_command "SHOW DATABASES;" | grep -E "dmi_wind|dmi_temp|dmi_sun|energy_consumption" || true
     echo ""
     
     log_info "Tables created:"
     echo "  1. dmi_wind.wind_raw_data"
     echo "  2. dmi_temp.temp_raw_data"
     echo "  3. dmi_sun.sun_raw_data"
-    echo "  4. energy_heating.heating_consumption_raw"
+    echo "  4. energy_consumption.consumption_raw_data"
     echo ""
     
     log_info "HDFS locations:"
     echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-wind"
     echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-temp"
     echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-sun"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
+    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/consumption"
     echo ""
     
     log_info "============================================"

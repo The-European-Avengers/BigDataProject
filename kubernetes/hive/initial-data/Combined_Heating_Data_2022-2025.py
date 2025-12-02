@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Private Heating Consumption Collection
-Collects heating consumption data from Danish Energy Data Service API
+Private Consumption Collection
+Collects consumption data from Danish Energy Data Service API
 Clean data with no empty values - perfect for analysis and streaming
 """
 
@@ -18,7 +18,7 @@ END_YEAR = 2025    # Go up to 2025 to get the latest data
 # RUTA COMPARTIDA: Debe coincidir con el 'mountPath' en el contenedor HIVE y Collector (YAML)
 SHARED_DATA_PATH = "/shared-data-for-hive"
 
-COMBINED_OUTPUT_FILE = f"{SHARED_DATA_PATH}/private_heating_consumption_2022-2025_combined.csv"
+COMBINED_OUTPUT_FILE = f"{SHARED_DATA_PATH}/private_consumption_2022-2025_combined.csv"
 
 BASE_URL = "https://api.energidataservice.dk/dataset/PrivateConsumptionHeatingHour"
 
@@ -109,7 +109,7 @@ def fetch_all_years_combined():
             
             if month_records:
                 # Save individual month file to shared volume
-                month_filename = f"{SHARED_DATA_PATH}/heating_consumption_{year}_{month:02d}.csv"
+                month_filename = f"{SHARED_DATA_PATH}/consumption_{year}_{month:02d}.csv"
                 save_to_csv(month_records, month_filename)
                 print(f"[INFO] Saved month {year}-{month:02d} to {month_filename}")
                 
@@ -148,37 +148,37 @@ def save_to_csv(records, filename):
 
 def main():
     """Main function."""
-    print("Private Heating Consumption Collection")
+    print("Private Consumption Collection")
     print(f"Year range: {START_YEAR} to {END_YEAR}")
     
     setup_directories()
     
     try:
         # Check if combined file exists
-        if os.path.exists(COMBINED_OUTPUT_FILE):
-            print(f"[INFO] Combined file already exists: {COMBINED_OUTPUT_FILE}")
-            user_input = input("[INPUT] Remove and recreate? (y/n): ").lower()
-            if user_input == 'y':
-                os.remove(COMBINED_OUTPUT_FILE)
-                print("[INFO] Removed existing combined file.")
-            else:
-                print("[INFO] Keeping existing file. Exiting.")
-                sys.exit(0)
+        # if os.path.exists(COMBINED_OUTPUT_FILE):
+        #     print(f"[INFO] Combined file already exists: {COMBINED_OUTPUT_FILE}")
+        #     user_input = input("[INPUT] Remove and recreate? (y/n): ").lower()
+        #     if user_input == 'y':
+        #         os.remove(COMBINED_OUTPUT_FILE)
+        #         print("[INFO] Removed existing combined file.")
+        #     else:
+        #         print("[INFO] Keeping existing file. Exiting.")
+        #         sys.exit(0)
         
         # Fetch all years combined
         all_records = fetch_all_years_combined()
         
-        if all_records:
-            # Save the massive combined file to shared volume
-            save_to_csv(all_records, COMBINED_OUTPUT_FILE)
-            print(f"\n[SUCCESS] Saved complete combined dataset to {COMBINED_OUTPUT_FILE}")
-            print(f"[SUCCESS] Total records spanning {START_YEAR}-{END_YEAR}: {len(all_records):,}")
+        # if all_records:
+        #     # Save the massive combined file to shared volume
+        #     save_to_csv(all_records, COMBINED_OUTPUT_FILE)
+        #     print(f"\n[SUCCESS] Saved complete combined dataset to {COMBINED_OUTPUT_FILE}")
+        #     print(f"[SUCCESS] Total records spanning {START_YEAR}-{END_YEAR}: {len(all_records):,}")
             
-            # Calculate file size estimate
-            estimated_size_mb = len(all_records) * 200 / (1024 * 1024)  # Rough estimate
-            print(f"[INFO] Estimated file size: ~{estimated_size_mb:.1f} MB")
-        else:
-            print("[WARNING] No data found for any months!")
+        #     # Calculate file size estimate
+        #     estimated_size_mb = len(all_records) * 200 / (1024 * 1024)  # Rough estimate
+        #     print(f"[INFO] Estimated file size: ~{estimated_size_mb:.1f} MB")
+        # else:
+        #     print("[WARNING] No data found for any months!")
         
         print("\n[DONE] Finished combined download!")
         print("Clean data ready for Hive processing!")
