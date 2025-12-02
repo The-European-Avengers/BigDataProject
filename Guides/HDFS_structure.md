@@ -200,30 +200,30 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 ├── raw
 │   ├── initial-load
 │   │   ├── weather-wind 
-|   |   |   ├──2020_dmi_wind.csv
-|   |   |   ├──2021_dmi_wind.csv
-|   |   |   ├──2022_dmi_wind.csv
-|   |   |   ├──2023_dmi_wind.csv
-|   |   |   └──2024_dmi_wind.csv
+│   │   │   ├── 2020_dmi_wind.csv
+│   │   │   ├── 2021_dmi_wind.csv
+│   │   │   ├── 2022_dmi_wind.csv
+│   │   │   ├── 2023_dmi_wind.csv
+│   │   │   └── 2024_dmi_wind.csv
 │   │   ├── weather-temp
-|   |   |   ├──2020_dmi_temp.csv
-|   |   |   ├──2021_dmi_temp.csv
-|   |   |   ├──2022_dmi_temp.csv
-|   |   |   ├──2023_dmi_temp.csv
-|   |   |   └──2024_dmi_temp.csv
+│   │   │   ├── 2020_dmi_temp.csv
+│   │   │   ├── 2021_dmi_temp.csv
+│   │   │   ├── 2022_dmi_temp.csv
+│   │   │   ├── 2023_dmi_temp.csv
+│   │   │   └── 2024_dmi_temp.csv
 │   │   ├── weather-sun
-|   |   |   ├──2020_dmi_sun.csv
-|   |   |   ├──2021_dmi_sun.csv
-|   |   |   ├──2022_dmi_sun.csv
-|   |   |   ├──2023_dmi_sun.csv
-|   |   |   └──2024_dmi_sun.csv
-│   │   └── heating-consumption
-|   │       ├──heating_consumption_2022_09.csv
-|   │       ├──heating_consumption_2022_10.csv
-|   │       ├──heating_consumption_2022_11.csv
-|   │       ├──heating_consumption_2022_12.csv
-|   │       ├──heating_consumption_2023_01.csv
-|   │       └──...
+│   │   │   ├── 2020_dmi_sun.csv
+│   │   │   ├── 2021_dmi_sun.csv
+│   │   │   ├── 2022_dmi_sun.csv
+│   │   │   ├── 2023_dmi_sun.csv
+│   │   │   └── 2024_dmi_sun.csv
+│   │   └── consumption
+│   │       ├── consumption_2022_09.csv
+│   │       ├── consumption_2022_10.csv
+│   │       ├── consumption_2022_11.csv
+│   │       ├── consumption_2022_12.csv
+│   │       ├── consumption_2023_01.csv
+│   │       └── ...
 │   ├── forecast
 │   │   ├── weather-wind
 │   │   ├── weather-temp
@@ -232,16 +232,18 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 ├── historical
 │   ├── 2020/2021/2022/2023/2024
 │   │   ├── weather-wind
-│   │   |   └──   [01-12].avro
+│   │   │   └── [01-12].avro
 │   │   ├── weather-temp
-│   │   |   └──   [01-12].avro
-│   │   └── weather-sun
-│   │       └──   [01-12].avro
+│   │   │   └── [01-12].avro
+│   │   ├── weather-sun
+│   │   │   └── [01-12].avro
+│   │   └── consumption
+│   │       └── [01-12].avro
 ├── live
 │   ├── weather-wind
 │   ├── weather-temp
-│   weather-sun
+│   └── weather-sun
 └── analytics
-```└── 
+```
 
 ![diagram](./assets/HDFS_strucutre_diagram.png)
