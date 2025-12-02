@@ -240,9 +240,10 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 │   │   └── consumption
 │   │       └── [01-12].avro
 ├── live
-│   ├── weather-wind
-│   ├── weather-temp
-│   └── weather-sun
+│   └── forecast
+│       ├── weather-wind.avro
+│       ├── weather-temp.avro
+│       └── weather-sun.avro
 └── analytics
 ```
 
