@@ -70,15 +70,12 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
     # 2. Determine Output Configs
     if topic == "weather-wind":
         out_topic = "weather-wind-enriched"
-        hdfs_subdir = "wind"
         out_schema_str = WIND_ENRICHED_SCHEMA
     elif topic == "weather-temp":
         out_topic = "weather-temp-enriched"
-        hdfs_subdir = "temp"
         out_schema_str = TEMP_ENRICHED_SCHEMA
     elif topic == "weather-sun":
         out_topic = "weather-sun-enriched"
-        hdfs_subdir = "sun"
         out_schema_str = SUN_ENRICHED_SCHEMA
     else:
         raise ValueError(f"Unsupported topic: {topic}")
@@ -86,6 +83,7 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
     # Construct Full HDFS URI
     hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000")
     hdfs_namenode = hdfs_namenode.rstrip("/")
+    hdfs_subdir = topic
     hdfs_output_path = f"{hdfs_namenode}/raw/forecast/{hdfs_subdir}"
 
     # 3. Read Stream - Conservative Settings
