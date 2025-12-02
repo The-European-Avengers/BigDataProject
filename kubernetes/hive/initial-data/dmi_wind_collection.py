@@ -108,7 +108,9 @@ def collect_wind_data(year):
                             "timeObserved": props.get("from"),
                             "stationId": station_id,
                             "stationName": station_name,
-                            "mean_wind_speed": wind_value
+                            "mean_wind_speed": wind_value,
+                            "lon": feature["geometry"]["coordinates"][0],
+                            "lat": feature["geometry"]["coordinates"][1]
                         })
             
             time.sleep(0.1)

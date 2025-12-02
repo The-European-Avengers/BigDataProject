@@ -148,7 +148,9 @@ def collect_radiation_data(year):
                             "timeObserved": props.get("from"),
                             "stationId": station_id,
                             "stationName": station_name,
-                            "mean_radiation": radiation_value
+                            "mean_radiation": radiation_value,
+                            "lon": feature["geometry"]["coordinates"][0],
+                            "lat": feature["geometry"]["coordinates"][1]
                         })
 
             time.sleep(0.1)
