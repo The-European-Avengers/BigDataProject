@@ -1,0 +1,72 @@
+# Producer Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: benchmark-producer
+  namespace: bd-bd-gr-05
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      imagePullSecrets:
+      - name: gitlab-registry
+      
+      restartPolicy: Never
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/producer:latest
+        imagePullPolicy: Always
+        args: ["100"]
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+
+---
+# Latency Monitor Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: latency-monitor
+  namespace: bd-bd-gr-05
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 2
+  template:
+    spec:
+      imagePullSecrets:
+      - name: gitlab-registry
+      
+      restartPolicy: Never
+      containers:
+      - name: monitor
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/latency-monitor:latest
+        imagePullPolicy: Always
+        args: ["100"]
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092,kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+        - name: SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        - name: INPUT_TOPIC
+          value: "weather.aggregated.output"
+        - name: MAX_WAIT_TIME_MS
+          value: "60000"
+        - name: MAX_EMPTY_POLLS
+          value: "10"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"

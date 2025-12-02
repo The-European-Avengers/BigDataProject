@@ -1,0 +1,91 @@
+stages:
+  - build
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Build Producer Image
+build-producer:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - cd producer
+    - docker build -t $CI_REGISTRY_IMAGE/producer:latest -t $CI_REGISTRY_IMAGE/producer:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/producer:latest
+    - docker push $CI_REGISTRY_IMAGE/producer:$CI_COMMIT_SHORT_SHA
+  rules:
+    - changes:
+        - producer/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# Build Spark Consumer Image
+build-spark-consumer:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - cd spark-consumer
+    - docker build -t $CI_REGISTRY_IMAGE/spark-consumer:latest -t $CI_REGISTRY_IMAGE/spark-consumer:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/spark-consumer:latest
+    - docker push $CI_REGISTRY_IMAGE/spark-consumer:$CI_COMMIT_SHORT_SHA
+  rules:
+    - changes:
+        - spark-consumer/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# Build Latency Monitor Image
+build-latency-monitor:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - cd latency-monitor
+    - docker build -t $CI_REGISTRY_IMAGE/latency-monitor:latest -t $CI_REGISTRY_IMAGE/latency-monitor:$CI_COMMIT_SHORT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/latency-monitor:latest
+    - docker push $CI_REGISTRY_IMAGE/latency-monitor:$CI_COMMIT_SHORT_SHA
+  rules:
+    - changes:
+        - latency-monitor/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# Manual: Build all images
+build-all:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    # Producer
+    - cd producer
+    - docker build -t $CI_REGISTRY_IMAGE/producer:latest .
+    - docker push $CI_REGISTRY_IMAGE/producer:latest
+    - cd ..
+    
+    # Spark Consumer
+    - cd spark-consumer
+    - docker build -t $CI_REGISTRY_IMAGE/spark-consumer:latest .
+    - docker push $CI_REGISTRY_IMAGE/spark-consumer:latest
+    - cd ..
+    
+    # Latency Monitor
+    - cd latency-monitor
+    - docker build -t $CI_REGISTRY_IMAGE/latency-monitor:latest .
+    - docker push $CI_REGISTRY_IMAGE/latency-monitor:latest
+    - cd ..
+  when: manual
