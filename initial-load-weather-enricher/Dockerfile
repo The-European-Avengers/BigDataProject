@@ -22,7 +22,7 @@ RUN wget -q "https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-
     mv "spark-${SPARK_VERSION}-bin-hadoop3" /opt/spark && \
     rm "spark-${SPARK_VERSION}-bin-hadoop3.tgz"
 
-# Download Avro JAR for Spark (required for writing AVRO files)
+# Download Avro JAR for Spark
 RUN wget -q "https://repo1.maven.org/maven2/org/apache/spark/spark-avro_2.12/3.4.1/spark-avro_2.12-3.4.1.jar" \
     -O /opt/spark/jars/spark-avro_2.12-3.4.1.jar
 
@@ -39,15 +39,9 @@ COPY --chown=sparkuser:sparkuser batch_enrichment.py /home/sparkuser/batch_enric
 # Copy municipality data
 COPY --chown=sparkuser:sparkuser data/municipality_codes_to_coordinates.csv /home/sparkuser/data/municipality_codes_to_coordinates.csv
 
-# Copy entrypoint script
-COPY --chown=sparkuser:sparkuser entrypoint-batch.sh /home/sparkuser/entrypoint-batch.sh
-
 # Install Python dependencies
 COPY requirements.txt /home/sparkuser/requirements.txt
 RUN pip install --no-cache-dir -r /home/sparkuser/requirements.txt
-
-# Make entrypoint executable
-RUN chmod +x /home/sparkuser/entrypoint-batch.sh
 
 # Set working directory
 WORKDIR /home/sparkuser
@@ -55,7 +49,7 @@ WORKDIR /home/sparkuser
 # Switch to non-root user
 USER sparkuser
 
-# Set environment variables with defaults
+# Set environment variables
 ENV HDFS_NAMENODE=hdfs://namenode-g5:9000
 ENV MUNICIPALITY_CSV=/home/sparkuser/data/municipality_codes_to_coordinates.csv
 ENV HADOOP_CONF_fs_defaultFS=hdfs://namenode-g5:9000
@@ -63,5 +57,5 @@ ENV HADOOP_CONF_fs_defaultFS=hdfs://namenode-g5:9000
 # Expose Spark UI port
 EXPOSE 4040
 
-# Run the batch enrichment job via entrypoint
-ENTRYPOINT ["/home/sparkuser/entrypoint-batch.sh"]
+# Run the batch enrichment job directly
+CMD ["python3", "/home/sparkuser/batch_enrichment.py"]
