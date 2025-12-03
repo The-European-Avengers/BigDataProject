@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: enrichment-process-initial
+  namespace: bd-bd-gr-05
+  labels:
+    app: enrichment-process-initial
+spec:
+  # Job will not be automatically deleted after completion
+  ttlSecondsAfterFinished: 86400  # Keep for 24 hours after completion
+
+  # Number of retries before marking job as failed
+  backoffLimit: 2
+
+  template:
+    metadata:
+      labels:
+        app: enrichment-process-initial
+    spec:
+      restartPolicy: OnFailure
+
+      imagePullSecrets:
+        - name: gitlab-registry
+
+      containers:
+        - name: batch-enrichment
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/batch-enrichment:latest
+          imagePullPolicy: Always
+
+          env:
+            # HDFS Configuration
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+
+            # Municipality CSV path (included in Docker image)
+            - name: MUNICIPALITY_CSV
+              value: "data/municipality_codes_to_coordinates.csv"
+
+            # Hadoop configuration
+            - name: HADOOP_CONF_fs_defaultFS
+              value: "hdfs://namenode-g5:9000"
+
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+            limits:
+              memory: "8Gi"
+              cpu: "4000m"

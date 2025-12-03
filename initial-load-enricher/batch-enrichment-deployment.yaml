@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-enrichment-process
+  namespace: bd-bd-gr-05
+  labels:
+    app: batch-enrichment-process
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-enrichment-process
+  template:
+    metadata:
+      labels:
+        app: batch-enrichment-process
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: batch-enrichment
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/batch-enrichment:latest
+          imagePullPolicy: Always
+
+          # Override command to keep container alive for debugging
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              echo "============================================================"
+              echo "  BATCH ENRICHMENT - DEBUG MODE"
+              echo "============================================================"
+              echo ""
+              echo "Container started successfully!"
+              echo "Environment:"
+              echo "  HDFS_NAMENODE: ${HDFS_NAMENODE}"
+              echo "  MUNICIPALITY_CSV: ${MUNICIPALITY_CSV}"
+              echo "  USER: $(whoami)"
+              echo "  WORKING DIR: $(pwd)"
+              echo ""
+              echo "Listing files:"
+              ls -lah /home/sparkuser/
+              echo ""
+              echo "Checking Python:"
+              python3 --version
+              echo ""
+              echo "Checking Spark:"
+              ls -lah $SPARK_HOME
+              echo ""
+              echo "Checking batch_enrichment.py:"
+              ls -lah /home/sparkuser/batch_enrichment.py
+              echo ""
+              echo "============================================================"
+              echo "  Running batch enrichment job..."
+              echo "============================================================"
+              echo ""
+              python3 /home/sparkuser/batch_enrichment.py
+              echo ""
+              echo "============================================================"
+              echo "  Job completed! Exit code: $?"
+              echo "============================================================"
+              echo ""
+              echo "Keeping container alive for 1 hour for debugging..."
+              sleep 3600
+
+          env:
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+            - name: MUNICIPALITY_CSV
+              value: "/home/sparkuser/data/municipality_codes_to_coordinates.csv"
+            - name: HADOOP_CONF_fs_defaultFS
+              value: "hdfs://namenode-g5:9000"
+
+          ports:
+            - containerPort: 4040
+              name: spark-ui
+
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-enrichment-process
+  namespace: bd-bd-gr-05
+  labels:
+    app: batch-enrichment-process
+spec:
+  selector:
+    app: batch-enrichment-process
+  ports:
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  type: ClusterIP

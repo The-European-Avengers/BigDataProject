@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-enrichment
+  namespace: bd-bd-gr-05
+  labels:
+    app: test-enrichment
+    type: test
+spec:
+  # Keep job for 1 hour after completion for log review
+  ttlSecondsAfterFinished: 3600
+
+  # Only retry once if it fails
+  backoffLimit: 1
+
+  template:
+    metadata:
+      labels:
+        app: test-enrichment
+        type: test
+    spec:
+      restartPolicy: OnFailure
+
+      imagePullSecrets:
+        - name: gitlab-registry
+
+      containers:
+        - name: test
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/test-enrichment:latest
+          imagePullPolicy: Always
+
+          env:
+            # Test with HDFS (set to "false" to skip HDFS tests)
+            - name: TEST_HDFS
+              value: "true"
+
+            # HDFS Configuration
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+
+            # Municipality CSV (included in image)
+            - name: MUNICIPALITY_CSV
+              value: "data/municipality_codes_to_coordinates.csv"
+
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
