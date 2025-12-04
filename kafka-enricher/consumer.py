@@ -1,15 +1,17 @@
 import os
+import re
 import threading
 import time
 import traceback
 import requests
+from datetime import datetime, timedelta
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import StringSerializer, SerializationContext, MessageField
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, expr
+from pyspark.sql.functions import col, expr, min as spark_min, max as spark_max
 from pyspark.sql.avro.functions import from_avro
 
 from enrichers import (
@@ -38,6 +40,118 @@ def get_latest_schema(registry_url, topic):
     except Exception as e:
         print(f"Failed to fetch schema for {subject}: {e}")
         raise e
+
+
+def parse_step_to_hours(step_str):
+    """
+    Parse ISO 8601 duration string (e.g., 'PT0H', 'PT72H') to hours.
+    Returns integer hours or 0 if parsing fails.
+    """
+    try:
+        match = re.match(r'PT(\d+)H', step_str)
+        if match:
+            return int(match.group(1))
+        return 0
+    except Exception:
+        return 0
+
+
+def calculate_forecast_range(batch_df, batch_time):
+    """
+    Calculate forecast range from step field.
+    Returns tuple: (from_datetime, to_datetime, from_str, to_str)
+    """
+    try:
+        # Get min and max step values
+        step_stats = batch_df.select(
+            spark_min("step").alias("min_step"),
+            spark_max("step").alias("max_step")
+        ).collect()[0]
+
+        min_step_str = step_stats["min_step"] or "PT0H"
+        max_step_str = step_stats["max_step"] or "PT72H"
+
+        min_hours = parse_step_to_hours(min_step_str)
+        max_hours = parse_step_to_hours(max_step_str)
+
+        from_time = batch_time + timedelta(hours=min_hours)
+        to_time = batch_time + timedelta(hours=max_hours)
+
+        from_str = from_time.strftime("%Y-%m-%d_%H-%M")
+        to_str = to_time.strftime("%Y-%m-%d_%H-%M")
+
+        return from_time, to_time, from_str, to_str
+
+    except Exception as e:
+        print(f"Warning: Could not calculate forecast range: {e}")
+        # Fallback: assume 0 to 72 hours
+        from_time = batch_time
+        to_time = batch_time + timedelta(hours=72)
+        from_str = from_time.strftime("%Y-%m-%d_%H-%M")
+        to_str = to_time.strftime("%Y-%m-%d_%H-%M")
+        return from_time, to_time, from_str, to_str
+
+
+def delete_hdfs_path(spark, hdfs_path):
+    """
+    Delete HDFS path using Hadoop FileSystem API via Spark.
+    """
+    try:
+        hadoop_conf = spark._jsc.hadoopConfiguration()
+        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
+        path = spark._jvm.org.apache.hadoop.fs.Path(hdfs_path)
+
+        if fs.exists(path):
+            fs.delete(path, True)  # True = recursive
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] Deleted old path: {hdfs_path}")
+            return True
+        else:
+            print(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] Path does not exist (skip delete): {hdfs_path}")
+            return False
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] Warning: Could not delete {hdfs_path}: {e}")
+        return False
+
+
+def rename_to_single_file(spark, source_dir, target_file):
+    """
+    Rename the single part file from coalesce(1) to a clean filename.
+    Example: part-00000-*.avro -> weather-wind.avro
+    """
+    try:
+        hadoop_conf = spark._jsc.hadoopConfiguration()
+        fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(hadoop_conf)
+
+        source_path = spark._jvm.org.apache.hadoop.fs.Path(source_dir)
+
+        # Find the part file
+        status_list = fs.listStatus(source_path)
+        part_file = None
+
+        for status in status_list:
+            filename = status.getPath().getName()
+            if filename.startswith("part-") and filename.endswith(".avro"):
+                part_file = status.getPath()
+                break
+
+        if part_file is None:
+            raise Exception(f"No part file found in {source_dir}")
+
+        # Rename to target
+        target_path = spark._jvm.org.apache.hadoop.fs.Path(target_file)
+        fs.rename(part_file, target_path)
+
+        # Clean up temp directory
+        fs.delete(source_path, True)
+
+        print(
+            f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] Renamed {part_file.getName()} -> {target_file}")
+        return True
+
+    except Exception as e:
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] Error renaming file: {e}")
+        return False
 
 
 def monitor_progress(query):
@@ -80,13 +194,19 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
     else:
         raise ValueError(f"Unsupported topic: {topic}")
 
-    # Construct Full HDFS URI
+    # Construct HDFS paths
     hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000")
     hdfs_namenode = hdfs_namenode.rstrip("/")
-    hdfs_subdir = topic
-    hdfs_output_path = f"{hdfs_namenode}/raw/forecast/{hdfs_subdir}"
 
-    # 3. Read Stream - Conservative Settings
+    # Live path (single file)
+    live_dir = f"{hdfs_namenode}/live/forecast"
+    live_file = f"{live_dir}/{topic}.avro"
+    live_temp_dir = f"{live_dir}/.temp_{topic}"
+
+    # Historical path (multiple parts, organized by year/month)
+    historical_base = f"{hdfs_namenode}/historical"
+
+    # 3. Read Stream
     df = (
         spark.readStream
         .format("kafka")
@@ -94,16 +214,13 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         .option("subscribe", topic)
         .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
-        .option("maxOffsetsPerTrigger", "100000")  # Keep conservative limit
+        .option("maxOffsetsPerTrigger", "100000")
         .option("kafka.request.timeout.ms", "60000")
         .option("kafka.session.timeout.ms", "30000")
         .load()
     )
 
-    # 4. Deserialize & Enrich Logic
-    # CRITICAL FIX: Skip the first 5 bytes (Confluent Magic Byte + Schema ID)
-    # Using expr("substring(value, 6)") converts the binary data to exclude the header
-    # Also added mode=PERMISSIVE to prevent crashing on bad records
+    # 4. Deserialize & Enrich
     parsed = df.select(
         from_avro(
             expr("substring(value, 6)"),
@@ -113,7 +230,6 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         col("timestamp")
     )
 
-    # Filter out nulls if deserialization failed due to PERMISSIVE mode
     parsed = parsed.filter(col("data").isNotNull())
 
     flat = parsed.select(
@@ -131,34 +247,49 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         .withColumn("municipalityCode", add_municipality_code_udf(col("lat"), col("lon")))
     )
 
-    # Prepare Serializer for this topic
+    # Prepare Kafka serializers
     avro_serializer = AvroSerializer(schema_registry_client, out_schema_str)
     string_serializer = StringSerializer('utf_8')
-
     producer_conf = {'bootstrap.servers': os.getenv("BOOTSTRAP_SERVERS", "kafka-g5:9092")}
 
-    # 5. Define foreachBatch Logic (Dual Sink: HDFS + Confluent Kafka)
-    def write_to_kafka_and_hdfs(batch_df, batch_id):
+    # 5. Define foreachBatch Logic (Triple Sink: Kafka + Live + Historical)
+    def write_to_kafka_live_and_historical(batch_df, batch_id):
         if batch_df.isEmpty():
             return
 
+        batch_start_time = datetime.now()
+        timestamp_str = batch_start_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+
+        print("\n" + "=" * 80)
+        print(f"[{timestamp_str}] ========== BATCH {batch_id} START ({topic}) ==========")
+        print("=" * 80)
+
         try:
-            # --- Sink 1: HDFS (Spark Native Write) ---
-            print(f"Writing batch {batch_id} to HDFS: {hdfs_output_path}")
-            (batch_df.write
-             .mode("append")
-             .format("avro")
-             .save(hdfs_output_path))
+            # Count records
+            record_count = batch_df.count()
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Received {record_count:,} records from Kafka")
 
-            # --- Sink 2: Kafka (Confluent Python Producer) ---
+            # Calculate forecast range
+            from_time, to_time, from_str, to_str = calculate_forecast_range(batch_df, batch_start_time)
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Forecast range: {from_str} to {to_str}")
+
+            # --- ENRICHMENT (already done in stream transformation) ---
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Enrichment completed (dkArea + municipalityCode)")
+
+            # --- Sink 1: Kafka Enriched Topics ---
+            kafka_start = datetime.now()
+            timestamp_str = kafka_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Writing to Kafka topic: {out_topic}")
+
             rows = batch_df.collect()
-
             producer = SerializingProducer(producer_conf)
 
             for row in rows:
                 try:
                     record = row.asDict()
-                    # Ensure lat/lon are not None for the key
                     if record['lat'] is not None and record['lon'] is not None:
                         key_str = f"{record['lat']}_{record['lon']}"
                     else:
@@ -173,10 +304,68 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
                     print(f"Skipping bad record in batch {batch_id}: {inner_e}")
 
             producer.flush()
-            print(f"Processed batch {batch_id} for {topic} (Sent {len(rows)} records to Kafka)")
+            kafka_duration = (datetime.now() - kafka_start).total_seconds()
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Kafka write completed ({record_count:,} records sent in {kafka_duration:.2f}s)")
+
+            # --- Sink 2: Live Folder (Single File, Overwrite) ---
+            live_start = datetime.now()
+            timestamp_str = live_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Writing to /live/forecast/{topic}.avro (OVERWRITE)")
+
+            # Delete old live file/directory
+            delete_hdfs_path(spark, live_file)
+            delete_hdfs_path(spark, live_temp_dir)
+
+            # Write to temp location with coalesce(1)
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Writing new /live/forecast/{topic}.avro")
+
+            batch_df.coalesce(1).write \
+                .mode("overwrite") \
+                .format("avro") \
+                .save(live_temp_dir)
+
+            # Rename to clean filename
+            rename_to_single_file(spark, live_temp_dir, live_file)
+
+            live_duration = (datetime.now() - live_start).total_seconds()
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Live file write completed in {live_duration:.2f}s")
+
+            # --- Sink 3: Historical Folder (Multiple Parts, Append) ---
+            historical_start = datetime.now()
+
+            # Build historical path: /historical/YYYY/weather-{topic}/MM/from_to_batch/
+            year = batch_start_time.strftime("%Y")
+            month = batch_start_time.strftime("%m")
+            batch_dir_name = f"{from_str}_to_{to_str}_batch-{batch_id}"
+
+            historical_path = f"{historical_base}/{year}/{topic}/{month}/{batch_dir_name}"
+
+            timestamp_str = historical_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Writing to {historical_path}")
+
+            # Write with multiple partitions (default Spark behavior for large data)
+            batch_df.write \
+                .mode("append") \
+                .format("avro") \
+                .save(historical_path)
+
+            historical_duration = (datetime.now() - historical_start).total_seconds()
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Historical write completed in {historical_duration:.2f}s")
+
+            # --- Summary ---
+            total_duration = (datetime.now() - batch_start_time).total_seconds()
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print("=" * 80)
+            print(f"[{timestamp_str}] ========== BATCH {batch_id} COMPLETED in {total_duration:.2f}s ==========")
+            print("=" * 80 + "\n")
 
         except Exception as e:
-            print(f"Error in batch {batch_id} for {topic}: {e}")
+            timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            print(f"[{timestamp_str}] Error in batch {batch_id} for {topic}: {e}")
             traceback.print_exc()
 
     # 6. Start Stream
@@ -184,14 +373,14 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
 
     query = (
         enriched_df.writeStream
-        .foreachBatch(write_to_kafka_and_hdfs)
+        .foreachBatch(write_to_kafka_live_and_historical)
         .queryName(f"Enricher_{topic}")
         .option("checkpointLocation", checkpoint_location)
         .trigger(processingTime=trigger_interval)
         .start()
     )
 
-    print(f"Started stream: {topic} -> Kafka({out_topic}) & HDFS({hdfs_output_path})")
+    print(f"Started stream: {topic} -> Kafka({out_topic}) & Live({live_file}) & Historical({historical_base})")
     return query
 
 
@@ -202,7 +391,8 @@ def main():
     checkpoint_root = os.getenv("CHECKPOINT_ROOT", "/tmp/spark/checkpoints/kafka_enricher")
     trigger_interval = os.getenv("TRIGGER_INTERVAL", "30 seconds")
     schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
-    municipality_csv_path = os.getenv("MUNICIPALITY_CSV", "data/municipality_codes_to_coordinates.csv")
+    municipality_csv_hdfs = os.getenv("MUNICIPALITY_CSV_HDFS",
+                                      "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv")
     hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000")
 
     # Initialize Schema Registry Client
@@ -222,23 +412,16 @@ def main():
         .getOrCreate()
     )
 
-    # 🔇 SUPPRESS KAFKA WARNINGS
-    spark.sparkContext.setLogLevel("ERROR")  # Changed from WARN to ERROR
+    # Suppress logs
+    spark.sparkContext.setLogLevel("ERROR")
 
-    # Suppress specific Kafka and Spark streaming warnings
     import logging
     logging.getLogger("org.apache.kafka").setLevel(logging.ERROR)
     logging.getLogger("org.apache.spark.sql.kafka010").setLevel(logging.ERROR)
     logging.getLogger("org.apache.spark.sql.execution.streaming").setLevel(logging.ERROR)
 
     # Init Lookup
-    if os.path.exists(municipality_csv_path):
-        init_municipality_lookup(spark, municipality_csv_path)
-    else:
-        print("WARNING: Municipality CSV not found, skipping enrichment init.")
-        import enrichers
-        enrichers.bc_municipality_coords = spark.sparkContext.broadcast(None)
-        enrichers.bc_municipality_codes = spark.sparkContext.broadcast(None)
+    init_municipality_lookup(spark, municipality_csv_hdfs)
 
     queries = []
     try:

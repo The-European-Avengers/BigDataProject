@@ -26,7 +26,6 @@ ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.
 
 # Create application directory and user
 RUN useradd -m -u 1001 sparkuser && \
-    mkdir -p /home/sparkuser/data && \
     chown -R sparkuser:sparkuser /home/sparkuser
 
 # Copy Python files
@@ -35,18 +34,12 @@ COPY --chown=sparkuser:sparkuser enrichers.py /home/sparkuser/enrichers.py
 COPY --chown=sparkuser:sparkuser schemas.py /home/sparkuser/schemas.py
 COPY --chown=sparkuser:sparkuser entrypoint.sh /home/sparkuser/entrypoint.sh
 
-# Copy municipality data
-COPY --chown=sparkuser:sparkuser data/municipality_codes_to_coordinates.csv /home/sparkuser/data/municipality_codes_to_coordinates.csv
-
 # Install Python dependencies
 COPY requirements.txt /home/sparkuser/requirements.txt
 RUN pip install --no-cache-dir -r /home/sparkuser/requirements.txt
 
 # Make entrypoint executable
 RUN chmod +x /home/sparkuser/entrypoint.sh
-
-# Create data directory (even if CSV is not present)
-RUN mkdir -p /home/sparkuser/data
 
 # Set working directory
 WORKDIR /home/sparkuser
@@ -58,8 +51,9 @@ USER sparkuser
 ENV BOOTSTRAP_SERVERS=kafka-g5:9092
 ENV SCHEMA_REGISTRY_URL=http://schema-registry:8081
 ENV CHECKPOINT_ROOT=/tmp/spark/checkpoints/kafka_enricher
-ENV TRIGGER_INTERVAL="10 seconds"
-ENV MUNICIPALITY_CSV=/home/sparkuser/data/municipality_codes_to_coordinates.csv
+ENV TRIGGER_INTERVAL="30 seconds"
+ENV MUNICIPALITY_CSV_HDFS=hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv
+ENV HDFS_NAMENODE=hdfs://namenode-g5:9000
 
 # Expose Spark UI port
 EXPOSE 4040

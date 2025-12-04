@@ -8,22 +8,71 @@ from pyspark.sql.types import IntegerType
 bc_municipality_coords = None
 bc_municipality_codes = None
 
-def init_municipality_lookup(spark, csv_path: str = "data/municipality_codes_to_coordinates.csv"):
+
+def init_municipality_lookup(spark,
+                             csv_path: str = "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"):
     """
-    Load municipality CSV and broadcast coordinates and codes.
+    Load municipality CSV from HDFS and broadcast coordinates and codes.
     This must be called once from the driver, after SparkSession is created.
     CSV expected columns: code, latitude, longitude
+
+    Args:
+        spark: SparkSession instance
+        csv_path: HDFS path to CSV file (default: hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv)
+
+    Raises:
+        Exception: If file cannot be loaded from HDFS
     """
     global bc_municipality_coords, bc_municipality_codes
 
-    # Load CSV on driver
-    df = pd.read_csv(csv_path)
-    coords = df[["latitude", "longitude"]].to_numpy(dtype=float)
-    codes = df["code"].astype(int).to_numpy()  # Convert to int
+    print(f"Loading municipality data from HDFS: {csv_path}")
 
-    # Broadcast to executors
-    bc_municipality_coords = spark.sparkContext.broadcast(coords)
-    bc_municipality_codes = spark.sparkContext.broadcast(codes)
+    try:
+        # Load CSV from HDFS using Spark DataFrame
+        spark_df = spark.read.csv(csv_path, header=True, inferSchema=True)
+
+        # Convert to Pandas on driver
+        pdf = spark_df.toPandas()
+
+        # Validate required columns
+        required_cols = ["code", "latitude", "longitude"]
+        missing_cols = [col for col in required_cols if col not in pdf.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns in CSV: {missing_cols}. Found columns: {list(pdf.columns)}")
+
+        # Extract coordinates and codes
+        coords = pdf[["latitude", "longitude"]].to_numpy(dtype=float)
+        codes = pdf["code"].astype(int).to_numpy()
+
+        # Validate data
+        if len(codes) == 0:
+            raise ValueError("CSV file is empty or contains no valid data")
+
+        # Broadcast to executors
+        bc_municipality_coords = spark.sparkContext.broadcast(coords)
+        bc_municipality_codes = spark.sparkContext.broadcast(codes)
+
+        print(f"✓ Successfully loaded {len(codes)} municipalities from HDFS")
+        print(f"✓ Municipality lookup initialized and broadcast to executors")
+
+    except Exception as e:
+        print("=" * 80)
+        print("ERROR: Failed to load municipality data from HDFS")
+        print("=" * 80)
+        print(f"Path attempted: {csv_path}")
+        print(f"Error: {e}")
+        print("")
+        print("To fix this issue:")
+        print("1. Make sure the file exists in HDFS:")
+        print(f"   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /utils/")
+        print("")
+        print("2. If the file doesn't exist, upload it:")
+        print("   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -mkdir -p /utils")
+        print("   kubectl cp municipality_codes_to_coordinates.csv bd-bd-gr-05/namenode-g5-0:/tmp/")
+        print(
+            "   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -put /tmp/municipality_codes_to_coordinates.csv /utils/")
+        print("=" * 80)
+        raise e
 
 
 @pandas_udf(IntegerType())
