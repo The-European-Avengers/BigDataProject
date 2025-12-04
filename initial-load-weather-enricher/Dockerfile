@@ -30,14 +30,10 @@ ENV PYTHONPATH="${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.
 
 # Create application directory and user
 RUN useradd -m -u 1001 sparkuser && \
-    mkdir -p /home/sparkuser/data && \
     chown -R sparkuser:sparkuser /home/sparkuser
 
 # Copy Python batch enrichment script
 COPY --chown=sparkuser:sparkuser batch_enrichment.py /home/sparkuser/batch_enrichment.py
-
-# Copy municipality data
-COPY --chown=sparkuser:sparkuser data/municipality_codes_to_coordinates.csv /home/sparkuser/data/municipality_codes_to_coordinates.csv
 
 # Install Python dependencies
 COPY requirements.txt /home/sparkuser/requirements.txt
@@ -51,7 +47,7 @@ USER sparkuser
 
 # Set environment variables
 ENV HDFS_NAMENODE=hdfs://namenode-g5:9000
-ENV MUNICIPALITY_CSV=/home/sparkuser/data/municipality_codes_to_coordinates.csv
+ENV MUNICIPALITY_CSV_HDFS=hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv
 ENV HADOOP_CONF_fs_defaultFS=hdfs://namenode-g5:9000
 
 # Expose Spark UI port

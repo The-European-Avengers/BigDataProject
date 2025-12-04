@@ -12,27 +12,65 @@ bc_municipality_coords = None
 bc_municipality_codes = None
 
 
-def init_municipality_lookup(spark, csv_path: str = "data/municipality_codes_to_coordinates.csv"):
+def init_municipality_lookup(spark,
+                             csv_path: str = "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"):
     """
-    Load municipality CSV and broadcast coordinates and codes.
+    Load municipality CSV from HDFS and broadcast coordinates and codes.
     This must be called once from the driver, after SparkSession is created.
     CSV expected columns: code, latitude, longitude
+
+    Args:
+        spark: SparkSession instance
+        csv_path: HDFS path to CSV file (default: hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv)
+
+    Raises:
+        Exception: If file cannot be loaded from HDFS
     """
     global bc_municipality_coords, bc_municipality_codes
 
-    print(f"📂 Loading municipality data from: {csv_path}")
+    print(f"📂 Loading municipality data from HDFS: {csv_path}")
 
-    # Load CSV on driver
-    df = pd.read_csv(csv_path)
-    coords = df[["latitude", "longitude"]].to_numpy(dtype=float)
-    codes = df["code"].astype(int).to_numpy()
+    try:
+        # Load CSV from HDFS using Spark DataFrame
+        spark_df = spark.read.csv(csv_path, header=True, inferSchema=True)
 
-    # Broadcast to executors
-    bc_municipality_coords = spark.sparkContext.broadcast(coords)
-    bc_municipality_codes = spark.sparkContext.broadcast(codes)
+        # Convert to Pandas on driver
+        df = spark_df.toPandas()
 
-    print(f"✓ Loaded {len(codes)} municipality codes for lookup")
-    print(f"  Sample codes: {codes[:10].tolist()}")
+        # Validate required columns
+        required_cols = ["code", "latitude", "longitude"]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns in CSV: {missing_cols}. Found columns: {list(df.columns)}")
+
+        coords = df[["latitude", "longitude"]].to_numpy(dtype=float)
+        codes = df["code"].astype(int).to_numpy()
+
+        # Broadcast to executors
+        bc_municipality_coords = spark.sparkContext.broadcast(coords)
+        bc_municipality_codes = spark.sparkContext.broadcast(codes)
+
+        print(f"✓ Successfully loaded {len(codes)} municipality codes from HDFS")
+        print(f"  Sample codes: {codes[:10].tolist()}")
+
+    except Exception as e:
+        print("=" * 80)
+        print("ERROR: Failed to load municipality data from HDFS")
+        print("=" * 80)
+        print(f"Path attempted: {csv_path}")
+        print(f"Error: {e}")
+        print("")
+        print("To fix this issue:")
+        print("1. Make sure the file exists in HDFS:")
+        print(f"   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /utils/")
+        print("")
+        print("2. If the file doesn't exist, upload it:")
+        print("   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -mkdir -p /utils")
+        print("   kubectl cp municipality_codes_to_coordinates.csv bd-bd-gr-05/namenode-g5-0:/tmp/")
+        print(
+            "   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -put /tmp/municipality_codes_to_coordinates.csv /utils/")
+        print("=" * 80)
+        raise e
 
 
 @pandas_udf(IntegerType())
@@ -201,11 +239,12 @@ def main():
 
     # Configuration
     hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000")
-    municipality_csv = os.getenv("MUNICIPALITY_CSV", "data/municipality_codes_to_coordinates.csv")
+    municipality_csv_hdfs = os.getenv("MUNICIPALITY_CSV_HDFS",
+                                      "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv")
 
     print(f"\nConfiguration:")
     print(f"  HDFS Namenode: {hdfs_namenode}")
-    print(f"  Municipality CSV: {municipality_csv}")
+    print(f"  Municipality CSV (HDFS): {municipality_csv_hdfs}")
     print()
 
     # Create Spark Session
@@ -225,12 +264,8 @@ def main():
     spark.sparkContext.setLogLevel("WARN")
     print(f"✓ Spark session created (version {spark.version})")
 
-    # Initialize municipality lookup
-    if os.path.exists(municipality_csv):
-        init_municipality_lookup(spark, municipality_csv)
-    else:
-        print(f"❌ ERROR: Municipality CSV not found at {municipality_csv}")
-        sys.exit(1)
+    # Initialize municipality lookup from HDFS
+    init_municipality_lookup(spark, municipality_csv_hdfs)
 
     overall_start = datetime.now()
 
