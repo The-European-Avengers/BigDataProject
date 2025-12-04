@@ -239,7 +239,7 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 │   │   │   └── [01-12].avro
 │   │   └── consumption
 │   │       └── [01-12].avro
-├── live
+├── live (Forecast up to 3 days, 1 entry per hour)
 │   └── forecast
 │       ├── weather-wind.avro
 │       ├── weather-temp.avro
