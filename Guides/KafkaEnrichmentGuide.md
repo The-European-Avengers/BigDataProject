@@ -1,177 +1,315 @@
-# Quick Start Guide - Weather Data Enrichment Pipeline
+# Kafka Enrichment Pipeline - Complete Guide
 
-This guide shows how to **run and restart** the weather data enrichment pipeline after the code has been deployed to the Kubernetes cluster.
+**Last Updated:** December 5, 2025  
+**Version:** v11 (UUID-based forecast cycle management)
 
-## Prerequisites
+## 📋 Table of Contents
 
-✅ All infrastructure already deployed (Kafka, Schema Registry, HDFS)  
-✅ Producer and Enricher Docker images already built and pushed to GitLab registry  
-✅ Kubernetes deployments already applied  
-
----
-
-## Architecture Quick Overview
-
-```
-DMI API → Producers → Kafka Topics → Enricher → Enriched Topics + HDFS
-           (3 pods)   (weather-*)     (Spark)    (*-enriched)   (/raw/forecast)
-```
-
-**Data Flow**:
-1. **Producers** fetch weather data (wind, temp, sun) from DMI API every 3 hours
-2. **Kafka** stores raw data in topics: `weather-wind`, `weather-temp`, `weather-sun`
-3. **Enricher** reads from Kafka, adds `DkArea` and `MunicipalityCode`, writes to:
-   - Kafka enriched topics: `weather-wind-enriched`, `weather-temp-enriched`, `weather-sun-enriched`
-   - HDFS: `/raw/forecast/wind`, `/raw/forecast/temp`, `/raw/forecast/sun`
+1. [Quick Start](#quick-start)
+2. [Architecture Overview](#architecture-overview)
+3. [Key Features](#key-features)
+4. [Deployment](#deployment)
+5. [Monitoring](#monitoring)
+6. [Verification](#verification)
+7. [Quick Reference](#quick-reference)
+8. [Notes](#notes)
 
 ---
 
-## Main Commands and Running the Pipeline
+## 🚀 Quick Start
 
-## 0. Delete old HDFS data
+### Prerequisites
+- ✅ Kafka cluster running (`kafka-g5-controller-0,1,2`)
+- ✅ Schema Registry deployed (`schema-registry:8081`)
+- ✅ HDFS namenode accessible (`namenode-g5:9000`)
+- ✅ Municipality CSV in HDFS (`/utils/municipality_codes_to_coordinates.csv`)
 
-```bash
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -rm -r -f /raw/forecast/wind
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -rm -r -f /raw/forecast/temp
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -rm -r -f /raw/forecast/sun
-```
-
-## 1. Restart producers
+### Start Pipeline
 
 ```bash
-kubectl rollout restart deployment/kafka-producer-1-g5 -n bd-bd-gr-05
-kubectl rollout restart deployment/kafka-producer-2-g5 -n bd-bd-gr-05
-kubectl rollout restart deployment/kafka-producer-3-g5 -n bd-bd-gr-05
-```
+# 1. Restart producers (generates new forecast cycle)
+kubectl rollout restart deployment/kafka-producer-{1,2,3}-g5 -n bd-bd-gr-05
 
-## 2. Watch one producer until completion
-
-```bash
+# 2. Wait for producers to send data (~30 minutes for first cycle)
 kubectl logs -f deployment/kafka-producer-1-g5 -n bd-bd-gr-05
-```
+# Look for: "✅ FORECAST CYCLE COMPLETED"
 
-Wait for log: "Successfully sent X records".
+# 3. Restart enricher (processes data from Kafka)
+kubectl rollout restart deployment/kafka-enricher -n bd-bd-gr-05
 
-## 3. Verify Schema Registry
-
-```bash
-kubectl run test --rm -i --restart=Never --image=curlimages/curl -n bd-bd-gr-05 -- curl http://schema-registry:8081/subjects
-```
-
-## 4. Restart enricher
-
-```bash
-kubectl delete pod -l app=kafka-enricher-artem -n bd-bd-gr-05
-```
-
-## 5. Watch enricher logs
-
-```bash
-kubectl logs -f -l app=kafka-enricher-artem -n bd-bd-gr-05
+# 4. Monitor enricher logs
+kubectl logs -f deployment/kafka-enricher -n bd-bd-gr-05
+# Look for: "✅ BATCH X COMPLETED"
 ```
 
 ---
 
-
-## Verification - Confirm Pipeline is Working
-
-### Verify Enriched Kafka Topics
-
-```bash
-# List all Kafka topics
-kubectl exec -it kafka-g5-controller-0 -n bd-bd-gr-05 -- \
-  kafka-topics.sh --bootstrap-server localhost:9092 --list
-
-# Should see both input and enriched topics:
-# weather-wind
-# weather-temp
-# weather-sun
-# weather-wind-enriched    ← Enricher output
-# weather-temp-enriched    ← Enricher output
-# weather-sun-enriched     ← Enricher output
-```
-
-### Verify HDFS Output
-
-```bash
-# Check HDFS directories exist
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
-  hdfs dfs -ls /raw/forecast
-
-
-# Count files in each directory
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
-  hdfs dfs -count /raw/forecast/wind
-  (files)           (bytes)
-
-# List files
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
-  hdfs dfs -ls /raw/forecast/wind | head -10
+## 🏗️ Architecture Overview
 
 ```
----
-
-## Important Notes
-
-### Timing
-
-- **Producers**: Run every 3 hours automatically (POLL_INTERVAL=10800 seconds)
-- **Enricher**: Processes data every 30 seconds (TRIGGER_INTERVAL=30 seconds)
-- **First run**: Takes ~2-3 minutes for full pipeline startup
-
-### Resource Usage
-
-```bash
-# Check resource usage
-kubectl top pod -n bd-bd-gr-05 | grep -E "producer|enricher"
-
-# Typical usage:
-# kafka-producer-1-g5:  CPU: 200m, Memory: 800Mi
-# kafka-enricher-artem: CPU: 1000m, Memory: 2Gi
+┌─────────────────┐
+│   DMI API       │  Forecast data (wind/temp/sun)
+│  (3 producers)  │  Updates every 3 hours
+│  + forecastId   │  UUID per cycle: abc-123
+└────────┬────────┘
+         │ Kafka Topics (Raw)
+         │ • weather-wind
+         │ • weather-temp  
+         │ • weather-sun
+         ▼
+┌────────────────────────────────┐
+│  kafka-enricher                │
+│  (Spark Streaming)             │
+│  ┌──────────────────────────┐  │
+│  │ Municipality Lookup      │  │
+│  │ /utils/municipality_...  │  │  98 Danish municipalities
+│  │ Nearest-neighbor mapping │  │  Euclidean distance
+│  └──────────────────────────┘  │
+│                                │
+│  Enrichments:                  │
+│  + dkArea (1 or 2)             │  Longitude-based region
+│  + municipalityCode (101-813)  │  Nearest municipality
+│  + forecastId (preserved)      │  UUID cycle tracking
+└─────┬──────────────────┬───────┘
+      │                  │
+      │                  ▼
+      │         ┌─────────────────────┐
+      │         │ Kafka Enriched      │  Schema Registry
+      │         │ (Output Topics)     │  Avro serialization
+      │         │ • weather-wind-...  │
+      │         │ • weather-temp-...  │
+      │         │ • weather-sun-...   │
+      │         └─────────────────────┘
+      │
+      ├─────────────────┬──────────────────┐
+      ▼                 ▼                  ▼
+┌──────────┐   ┌────────────────┐  ┌────────────────┐
+│   Live   │   │  Historical    │  │ Live Archives  │
+│  /live/  │   │ /historical/   │  │ /historical/   │
+│ forecast/│   │ YYYY/topic/    │  │ live-archives/ │
+│ {topic}/ │   │ MM_streaming/  │  │ YYYY/MM/       │
+│          │   │ batch-N/       │  │ {topic}_UUID/  │
+└──────────┘   └────────────────┘  └────────────────┘
+     │                                      │
+     │ Current cycle                        │ Completed cycles
+     │ APPEND mode                          │ ARCHIVED on UUID change
+     │ Rotates every 3h                     │
+     ▼                                      ▼
+Dashboard/API                        Long-term Analytics
 ```
-
-### Data Retention
-
-- **Kafka topics**: Retention depends on Kafka configuration (default: 7 days)
-- **HDFS**: Data persists until manually deleted
-- **Checkpoints**: Stored in enricher pod's ephemeral storage
 
 ---
 
-## Quick Reference
+## 🎯 Key Features
+
+### 1. Triple Sink Architecture
+Every batch writes to 3 destinations simultaneously:
+
+| Sink | Path | Mode | Purpose |
+|------|------|------|---------|
+| **Kafka** | `weather-{param}-enriched` | Produce | Downstream consumers |
+| **Live HDFS** | `/live/forecast/{topic}/` | Append | Current 3h cycle (dashboard) |
+| **Historical** | `/historical/YYYY/{topic}/MM_streaming/` | Overwrite | Detailed batch tracking |
+
+### 2. UUID-Based Forecast Cycle Management
+
+**Producer Side:**
+```python
+# Every 3 hours, producer generates new UUID
+forecast_id = str(uuid.uuid4())  # e.g., "5d4d7ed2-1860-490c-b032-fe0922930ba4"
+
+# All records in this cycle get same forecastId
+record = {
+    "lon": lon, "lat": lat, "value": value,
+    "step": step, "parameter": parameter,
+    "forecastId": forecast_id  # ← NEW
+}
+```
+
+**Enricher Side:**
+```python
+# Detect new forecast cycle
+if batch_forecast_id != current_forecast_ids[topic]:
+    # 1. Archive current live data to historical
+    archive_live_file(live_path, old_forecast_id)
+    
+    # 2. Delete live directory
+    delete_hdfs_path(live_path)
+    
+    # 3. Start fresh with new forecastId
+    current_forecast_ids[topic] = batch_forecast_id
+```
+
+**Result:**
+- Clean file rotation every 3 hours
+- No data mixing between forecast cycles
+- Historical archive of all cycles for accuracy analysis
+
+### 3. Municipality Enrichment
+
+**CSV Format:** `/utils/municipality_codes_to_coordinates.csv`
+```csv
+code,latitude,longitude
+101,55.6761,12.5683    # København
+147,55.3959,10.3883    # Fredericia
+...
+(98 municipalities)
+```
+
+
+### 4. Schema Evolution with Avro
+
+**Input Schema** (from producer):
+```json
+{
+  "fields": [
+    {"name": "lon", "type": "double"},
+    {"name": "lat", "type": "double"},
+    {"name": "value", "type": "double"},
+    {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string"},
+    {"name": "forecastId", "type": "string"}
+  ]
+}
+```
+
+**Output Schema** (enriched):
+```json
+{
+  "fields": [
+    {"name": "lon", "type": "double"},
+    {"name": "lat", "type": "double"},
+    {"name": "value", "type": "double"},
+    {"name": "step", "type": "string"},
+    {"name": "parameter", "type": "string"},
+    {"name": "forecastId", "type": "string"},
+    {"name": "dkArea", "type": "int"},           // ← ADDED
+    {"name": "municipalityCode", "type": "int"}  // ← ADDED
+  ]
+}
+```
+
+---
+
+## 🚢 Deployment
+
+### 1. Build and Push
+
+```bash
+docker build --platform linux/amd64 -t registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher:latest .
+
+docker push registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher:latest
+```
+
+### 2. Kubernetes Deployment
+
+**Apply:**
+```bash
+kubectl apply -f kafka-enricher.yaml
+```
+
+
+## 📊 Monitoring
+
+### 1. Enricher Logs
+
+```bash
+# Follow live logs
+kubectl logs -f deployment/kafka-enricher -n bd-bd-gr-05
+
+# Recent logs
+kubectl logs --tail=100 deployment/kafka-enricher -n bd-bd-gr-05
+```
+
+
+### 2. Spark UI
+
+```bash
+# Port-forward Spark UI
+kubectl port-forward -n bd-bd-gr-05 svc/kafka-enricher 4040:4040
+
+# Access at: http://localhost:4040
+```
+
+**Key Metrics:**
+- **Streaming tab:** Batch processing times, input rates
+- **Executors tab:** Memory usage, task distribution
+- **SQL tab:** Query plans for each batch
+
+
+
+---
+
+## ✅ Verification
+
+
+### 1. Verify HDFS Output
+
+```bash
+# Check live forecast directory
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /live/forecast/
+
+# Expected:
+# drwxr-xr-x   - sparkuser supergroup  0 2025-12-05 18:20 /live/forecast/weather-wind
+# drwxr-xr-x   - sparkuser supergroup  0 2025-12-05 18:20 /live/forecast/weather-temp
+# drwxr-xr-x   - sparkuser supergroup  0 2025-12-05 18:20 /live/forecast/weather-sun
+
+# Check live file size (should be growing)
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -du -h /live/forecast/weather-wind
+
+# Check historical streaming batches
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
+  hdfs dfs -ls /historical/2025/weather-wind/12_historical_streaming/ | tail -5
+
+# Check live archives (after 3h cycle completion)
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
+  hdfs dfs -ls /historical/live-archives/2025/weather-wind/12_historical_streaming/
+```
+
+---
+
+## 📚 Quick Reference
 
 ### Essential Commands
 
 ```bash
-# Start pipeline
+# Start/Restart Pipeline
 kubectl rollout restart deployment/kafka-producer-{1,2,3}-g5 -n bd-bd-gr-05
-kubectl rollout restart deployment/kafka-enricher-artem -n bd-bd-gr-05
+kubectl rollout restart deployment/kafka-enricher -n bd-bd-gr-05
 
 # Monitor
-kubectl logs -f deployment/kafka-producer-1-g5 -n bd-bd-gr-05
-kubectl logs -f -l app=kafka-enricher-artem -n bd-bd-gr-05
+kubectl logs -f deployment/kafka-enricher -n bd-bd-gr-05
+kubectl top pod -n bd-bd-gr-05 | grep enricher
 
-# Verify
+# Verify Output
 kubectl exec -it kafka-g5-controller-0 -n bd-bd-gr-05 -- kafka-topics.sh --bootstrap-server localhost:9092 --list
-kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /raw/forecast
+kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /live/forecast/
 
-# Check schemas
-kubectl run test --rm -i --restart=Never --image=curlimages/curl -n bd-bd-gr-05 -- curl http://schema-registry:8081/subjects
-
-# Access Redpanda Console
-kubectl port-forward -n bd-bd-gr-05 svc/redpanda-console 8080:8080
-# http://localhost:8080
+# Access UIs
+kubectl port-forward -n bd-bd-gr-05 svc/kafka-enricher 4040:4040        # Spark UI
+kubectl port-forward -n bd-bd-gr-05 svc/redpanda-console 8080:8080     # Kafka UI
 ```
 
+### Important Paths
+
+| Path | Type | Purpose |
+|------|------|---------|
+| `/live/forecast/{topic}/` | HDFS Directory | Current 3h forecast cycle (append mode) |
+| `/historical/YYYY/{topic}/MM_streaming/` | HDFS Directory | Detailed batch tracking |
+| `/historical/live-archives/YYYY/{topic}/MM_streaming/` | HDFS Directory | Archived 3h cycles |
+| `/utils/municipality_codes_to_coordinates.csv` | HDFS File | Municipality mapping (98 codes) |
+| `weather-{param}-enriched` | Kafka Topic | Enriched output with dkArea + municipalityCode |
 
 ---
 
-## Support
+## 📝 Notes
 
-If you encounter issues:
+- **Checkpoint Versioning:** Always bump `CHECKPOINT_ROOT` version when changing schemas or processing logic
+- **Single Replica:** Enricher must run as single replica (stateful streaming with checkpoints)
+- **Memory Requirements:** Minimum 2Gi, recommended 4Gi for stable operation
+- **Batch Interval:** 30 seconds default, adjust based on data volume
+- **Forecast Cycles:** Producer generates new UUID every 3 hours (POLL_INTERVAL=10800s)
+- **Archive Timing:** Live data archived when new forecastId detected (automatic)
+- **Municipality Broadcast:** Loaded once at startup, cached in memory for performance
 
-1. **Check logs** first: `kubectl logs -f <pod-name> -n bd-bd-gr-05`
-2. **Check pod status**: `kubectl describe pod <pod-name> -n bd-bd-gr-05`
-3. **Verify connectivity**: Use `curl` test pods to check services
-4. **Consult troubleshooting section** above
-
+**Last Updated:** December 5, 2025 18:30 CET
