@@ -1,9 +1,6 @@
 # Kafka Enrichment Pipeline - Complete Guide
 
-**Last Updated:** December 5, 2025  
-**Version:** v11 (UUID-based forecast cycle management)
-
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Quick Start](#quick-start)
 2. [Architecture Overview](#architecture-overview)
@@ -16,13 +13,13 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
-- ✅ Kafka cluster running (`kafka-g5-controller-0,1,2`)
-- ✅ Schema Registry deployed (`schema-registry:8081`)
-- ✅ HDFS namenode accessible (`namenode-g5:9000`)
-- ✅ Municipality CSV in HDFS (`/utils/municipality_codes_to_coordinates.csv`)
+- Kafka cluster running (`kafka-g5-controller-0,1,2`)
+- Schema Registry deployed (`schema-registry:8081`)
+- HDFS namenode accessible (`namenode-g5:9000`)
+- Municipality CSV in HDFS (`/utils/municipality_codes_to_coordinates.csv`)
 
 ### Start Pipeline
 
@@ -32,19 +29,19 @@ kubectl rollout restart deployment/kafka-producer-{1,2,3}-g5 -n bd-bd-gr-05
 
 # 2. Wait for producers to send data (~30 minutes for first cycle)
 kubectl logs -f deployment/kafka-producer-1-g5 -n bd-bd-gr-05
-# Look for: "✅ FORECAST CYCLE COMPLETED"
+# Look for: "FORECAST CYCLE COMPLETED"
 
 # 3. Restart enricher (processes data from Kafka)
 kubectl rollout restart deployment/kafka-enricher -n bd-bd-gr-05
 
 # 4. Monitor enricher logs
 kubectl logs -f deployment/kafka-enricher -n bd-bd-gr-05
-# Look for: "✅ BATCH X COMPLETED"
+# Look for: "BATCH X COMPLETED"
 ```
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ```
 ┌─────────────────┐
@@ -100,7 +97,7 @@ Dashboard/API                        Long-term Analytics
 
 ---
 
-## 🎯 Key Features
+## Key Features
 
 ### 1. Triple Sink Architecture
 Every batch writes to 3 destinations simultaneously:
@@ -191,7 +188,7 @@ code,latitude,longitude
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 ### 1. Build and Push
 
@@ -209,7 +206,7 @@ kubectl apply -f kafka-enricher.yaml
 ```
 
 
-## 📊 Monitoring
+## Monitoring
 
 ### 1. Enricher Logs
 
@@ -240,7 +237,7 @@ kubectl port-forward -n bd-bd-gr-05 svc/kafka-enricher 4040:4040
 
 ---
 
-## ✅ Verification
+## Verification
 
 
 ### 1. Verify HDFS Output
@@ -268,7 +265,7 @@ kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- \
 
 ---
 
-## 📚 Quick Reference
+## Quick Reference
 
 ### Essential Commands
 
@@ -302,7 +299,7 @@ kubectl port-forward -n bd-bd-gr-05 svc/redpanda-console 8080:8080     # Kafka U
 
 ---
 
-## 📝 Notes
+## Notes
 
 - **Checkpoint Versioning:** Always bump `CHECKPOINT_ROOT` version when changing schemas or processing logic
 - **Single Replica:** Enricher must run as single replica (stateful streaming with checkpoints)
@@ -311,5 +308,3 @@ kubectl port-forward -n bd-bd-gr-05 svc/redpanda-console 8080:8080     # Kafka U
 - **Forecast Cycles:** Producer generates new UUID every 3 hours (POLL_INTERVAL=10800s)
 - **Archive Timing:** Live data archived when new forecastId detected (automatic)
 - **Municipality Broadcast:** Loaded once at startup, cached in memory for performance
-
-**Last Updated:** December 5, 2025 18:30 CET
