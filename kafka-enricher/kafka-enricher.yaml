@@ -31,7 +31,7 @@ spec:
               value: "http://schema-registry:8081"
             # 🔧 Changed checkpoint path to v3 to start fresh
             - name: CHECKPOINT_ROOT
-              value: "/tmp/spark/checkpoints/kafka_enricher_v4"
+              value: "/tmp/spark/checkpoints/kafka_enricher_v7"
             # 🔧 HDFS Configuration
             - name: HDFS_NAMENODE
               value: "hdfs://namenode-g5:9000"

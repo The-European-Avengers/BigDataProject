@@ -1,5 +1,5 @@
 # schemas.py
-# Avro schemas for enriched weather data output
+# Avro schemas for enriched weather data output (WITH forecastId)
 
 WIND_ENRICHED_SCHEMA = """
 {
@@ -12,6 +12,7 @@ WIND_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
+    {"name": "forecastId", "type": "string"},
     {"name": "dkArea", "type": "int"},
     {"name": "municipalityCode", "type": "int"}
   ]
@@ -29,6 +30,7 @@ TEMP_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
+    {"name": "forecastId", "type": "string"},
     {"name": "dkArea", "type": "int"},
     {"name": "municipalityCode", "type": "int"}
   ]
@@ -46,6 +48,7 @@ SUN_ENRICHED_SCHEMA = """
     {"name": "value", "type": "double"},
     {"name": "step", "type": "string"},
     {"name": "parameter", "type": "string"},
+    {"name": "forecastId", "type": "string"},
     {"name": "dkArea", "type": "int"},
     {"name": "municipalityCode", "type": "int"}
   ]
