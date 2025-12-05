@@ -182,7 +182,7 @@ def archive_live_file(spark, topic, live_path, forecast_id, hdfs_namenode):
         month = datetime.now().strftime("%m")
         # Archive to a directory named with the forecastId and timestamp
         archive_dir_name = f"{topic}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{forecast_id[:8]}"
-        historical_path = f"{hdfs_namenode}/historical/live-archives/{year}/{month}/{archive_dir_name}"
+        historical_path = f"{hdfs_namenode}/historical/live-archives/{year}/{topic}/{month}_historical_streaming/{archive_dir_name}"
 
         print(f"[{timestamp_str}] 📦 Archiving live directory to historical...")
         print(f"[{timestamp_str}]    From: {live_path}")
@@ -249,13 +249,12 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
     # HDFS paths
     hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000").rstrip("/")
     live_dir_base = f"{hdfs_namenode}/live/forecast"
-    # FIX 1: live_path must be a directory for Spark append mode to work.
+    # live_path must be a directory for Spark append mode to work.
     live_path = f"{live_dir_base}/{topic}"
     historical_base = f"{hdfs_namenode}/historical"
 
     # Try to restore current forecastId from live data directory
     if topic not in current_forecast_ids:
-        # FIX 2: Pass the correct directory path to restore function
         current_forecast_ids[topic] = restore_current_forecast_id(spark, live_path)
 
     # Read stream
@@ -316,8 +315,6 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
             batch_forecast_id = batch_df.select("forecastId").first()[0]
 
             # Check if this is a NEW forecast cycle
-            # Use 'if current_forecast_ids.get(topic)' to simplify the logic, but the explicit
-            # None check is safer since we set it to None on failure.
             if current_forecast_ids[topic] is None:
                 # First batch ever OR restart after empty HDFS (None restored)
                 print("\n" + "=" * 80)
@@ -335,13 +332,10 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
                 print(f"[{timestamp_str}] New Forecast ID: {batch_forecast_id[:8]}...")
                 print("=" * 80)
 
-                # FIX 3: Pass the correct directory path to archive function
                 archive_live_file(spark, topic, live_path, current_forecast_ids[topic], hdfs_namenode)
 
-                # FIX 4: Delete old live data directory
                 delete_hdfs_path(spark, live_path)
 
-                # Update tracking
                 current_forecast_ids[topic] = batch_forecast_id
 
                 print(f"[{timestamp_str}] ✅ Ready for new forecast cycle")
@@ -365,7 +359,6 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
             print(
                 f"\n[{kafka_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] 📤 SINK 1/3: Writing to Kafka enriched topic: {out_topic}")
 
-            # Collect is safe here as batch is max 100k, but generally not scalable for huge batches
             rows = batch_df.collect()
             producer = SerializingProducer(producer_conf)
 
@@ -390,7 +383,6 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
 
             # Sink 2: Live File (APPEND to accumulate batches for current forecast cycle)
             live_start = datetime.now()
-            # Use the directory path for Spark save
             print(
                 f"\n[{live_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] 💾 SINK 2/3: Appending to live HDFS: {live_path}")
 
@@ -407,14 +399,13 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
             historical_start = datetime.now()
             year = batch_start_time.strftime("%Y")
             month = batch_start_time.strftime("%m")
-            # This path is already a unique directory (good)
-            batch_dir_name = f"{from_str}_to_{to_str}_batch-{batch_id}_forecast-{batch_forecast_id[:8]}"
-            historical_path = f"{historical_base}/{year}/{topic}/{month}/{batch_dir_name}"
+
+            batch_dir_name = f"live_from_{from_str}_batch-{batch_id}_forecast-{batch_forecast_id[:8]}"
+            historical_path = f"{historical_base}/{year}/{topic}/{month}_historical_streaming/{batch_dir_name}"
 
             print(
                 f"\n[{historical_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] 📁 SINK 3/3: Writing to historical HDFS: {historical_path}")
 
-            # Use overwrite mode for historical batches since the path is unique per batch/ID
             batch_df.write \
                 .mode("overwrite") \
                 .format("avro") \
@@ -451,7 +442,6 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         .start()
     )
 
-    # FIX 6: Use the correct live path in the print statement
     print(f"Started stream: {topic} -> Kafka({out_topic}) & Live({live_path}) & Historical({historical_base})")
     return query
 
