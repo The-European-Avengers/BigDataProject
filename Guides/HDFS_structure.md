@@ -194,57 +194,147 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 | **`/analytics`** | Stores processed and aggregated data used for analytics, dashboards, or reporting. |
 
 ### Example Folder Tree
-
 ```text
-/
-├── raw
-│   ├── initial-load
-│   │   ├── weather-wind 
-│   │   │   ├── 2020_dmi_wind.csv
-│   │   │   ├── 2021_dmi_wind.csv
-│   │   │   ├── 2022_dmi_wind.csv
-│   │   │   ├── 2023_dmi_wind.csv
-│   │   │   └── 2024_dmi_wind.csv
-│   │   ├── weather-temp
-│   │   │   ├── 2020_dmi_temp.csv
-│   │   │   ├── 2021_dmi_temp.csv
-│   │   │   ├── 2022_dmi_temp.csv
-│   │   │   ├── 2023_dmi_temp.csv
-│   │   │   └── 2024_dmi_temp.csv
-│   │   ├── weather-sun
-│   │   │   ├── 2020_dmi_sun.csv
-│   │   │   ├── 2021_dmi_sun.csv
-│   │   │   ├── 2022_dmi_sun.csv
-│   │   │   ├── 2023_dmi_sun.csv
-│   │   │   └── 2024_dmi_sun.csv
-│   │   └── consumption
-│   │       ├── consumption_2022_09.csv
-│   │       ├── consumption_2022_10.csv
-│   │       ├── consumption_2022_11.csv
-│   │       ├── consumption_2022_12.csv
-│   │       ├── consumption_2023_01.csv
-│   │       └── ...
-│   ├── forecast
-│   │   ├── weather-wind
-│   │   ├── weather-temp
-│   │   └── weather-sun
-│   └── price
-├── historical
-│   ├── 2020/2021/2022/2023/2024
-│   │   ├── weather-wind
-│   │   │   └── [01-12].avro
-│   │   ├── weather-temp
-│   │   │   └── [01-12].avro
-│   │   ├── weather-sun
-│   │   │   └── [01-12].avro
-│   │   └── consumption
-│   │       └── [01-12].avro
-├── live (Forecast up to 3 days, 1 entry per hour)
-│   └── forecast
-│       ├── weather-wind.avro
-│       ├── weather-temp.avro
-│       └── weather-sun.avro
-└── analytics
+hdfs://namenode-g5:9000/
+│
+├── analytics/                           (empty - reserved)
+│
+├── historical/                          (~11 GB - enriched data)
+│   ├── 2020/
+│   │   ├── weather-wind/
+│   │   ├── weather-temp/
+│   │   └── weather-sun/
+│   │
+│   ├── 2021/
+│   │   ├── weather-wind/
+│   │   ├── weather-temp/
+│   │   └── weather-sun/
+│   │
+│   ├── 2022/
+│   │   ├── consumption/                   (5 months: 08-12)
+│   │   │   ├── 08.avro/
+│   │   │   ├── 09.avro/
+│   │   │   ├── 10.avro/
+│   │   │   ├── 11.avro/
+│   │   │   └── 12.avro/
+│   │   ├── weather-wind/                  (12 months: 01-12)
+│   │   │   ├── 01.avro/
+│   │   │   ├── 02.avro/
+│   │   │   ├── ...
+│   │   │   └── 12.avro/
+│   │   ├── weather-temp/                  (12 months)
+│   │   └── weather-sun/                   (12 months)
+│   │
+│   ├── 2023/
+│   │   ├── consumption/                   (12 months: 01-12)
+│   │   │   ├── 01.avro/
+│   │   │   ├── 02.avro/
+│   │   │   ├── ...
+│   │   │   └── 12.avro/
+│   │   ├── weather-wind/                  (12 months)
+│   │   ├── weather-temp/                  (12 months)
+│   │   └── weather-sun/                   (12 months)
+│   │
+│   ├── 2024/
+│   │   ├── consumption/                   (12 months: 01-12)
+│   │   ├── weather-wind/                  (12 months)
+│   │   ├── weather-temp/                  (12 months)
+│   │   └── weather-sun/                   (12 months)
+│   │
+│   ├── 2025/
+│   │   ├── consumption/                   (11 months: 01-11)
+│   │   ├── weather-wind/
+│   │   │   ├── 01.avro/                  (batch processed)
+│   │   │   └── 12_historical_streaming/   (live batches - growing)
+│   │   │       ├── live_from_2025-12-05_16-30_batch-0_forecast-a94e5561/
+│   │   │       ├── live_from_2025-12-05_16-31_batch-1_forecast-a94e5561/
+│   │   │       ├── ...
+│   │   │       └── live_from_2025-12-05_18-03_batch-XX_forecast-XXXXXXXX/
+│   │   │
+│   │   ├── weather-temp/
+│   │   │   ├── 01.avro/
+│   │   │   └── 12_historical_streaming/   (live batches)
+│   │   │
+│   │   └── weather-sun/
+│   │       ├── 01.avro/
+│   │       └── 12_historical_streaming/   (66 batches with 2 forecast IDs)
+│   │           ├── live_from_2025-12-05_16-30_batch-0_forecast-a94e5561/
+│   │           ├── ...
+│   │           ├── live_from_2025-12-05_16-46_batch-32_forecast-a94e5561/  (first cycle)
+│   │           ├── live_from_2025-12-05_17-24_batch-33_forecast-42abcd32/  (second cycle)
+│   │           ├── ...
+│   │           └── live_from_2025-12-05_17-40_batch-65_forecast-42abcd32/
+│   │
+│   └── live-archives/                     (completed forecast cycles)
+│       └── 2025/
+│           └── 12/
+│               └── (empty - waiting for first cycle completion)
+│
+├── live/                                (273 MB - current cycle)
+│   └── forecast/
+│       ├── weather-wind/                  (33 part files, 105 MB)
+│       │   ├── part-00000-00e2ce5c-...-c000.avro  (3.2 MB)
+│       │   ├── part-00000-0194ee2d-...-c000.avro  (3.2 MB)
+│       │   ├── ...
+│       │   └── part-00000-f6e20d8b-...-c000.avro  (3.2 MB)
+│       │
+│       ├── weather-temp/                  (34 part files, 94 MB)
+│       │   ├── part-00000-0013361b-...-c000.avro  (2.8 MB)
+│       │   ├── part-00000-027cff7b-...-c000.avro  (2.8 MB)
+│       │   ├── ...
+│       │   ├── part-00000-919d4541-...-c000.avro  (21 KB - last batch)
+│       │   └── part-00000-ff8f40ed-...-c000.avro  (2.8 MB)
+│       │
+│       └── weather-sun/                   (33 part files, 74 MB)
+│           ├── part-00000-02c60d20-...-c000.avro  (2.3 MB)
+│           ├── part-00000-05bfd522-...-c000.avro  (2.3 MB)
+│           ├── ...
+│           ├── part-00000-59b4a515-...-c000.avro  (1.1 MB - last batch)
+│           └── part-00000-c921a3b1-...-c000.avro  (2.3 MB)
+│
+├── raw/                                 (2.1 GB - CSV files)
+│   ├── initial-load/
+│   │   ├── consumption/                   (38 files, 1.9 GB)
+│   │   │   ├── consumption_2022_09.csv    (49.8 MB)
+│   │   │   ├── consumption_2022_10.csv    (51.8 MB)
+│   │   │   ├── ...
+│   │   │   └── consumption_2025_11.csv    (30.6 MB)
+│   │   │
+│   │   ├── price/                         (10 files, 7.4 MB)
+│   │   │   ├── DayAheadPrices_DK1_202101010000-202201010000.csv  (764 KB)
+│   │   │   ├── DayAheadPrices_DK1_202201010000-202301010000.csv  (769 KB)
+│   │   │   ├── ...
+│   │   │   └── DayAheadPrices_DK2_202501010000-202601010000.csv  (544 KB)
+│   │   │
+│   │   ├── weather-wind/                  (5 files, 165 MB)
+│   │   │   ├── 2020_dmi_wind.csv          (33.0 MB)
+│   │   │   ├── 2021_dmi_wind.csv          (32.9 MB)
+│   │   │   ├── 2022_dmi_wind.csv          (33.1 MB)
+│   │   │   ├── 2023_dmi_wind.csv          (33.1 MB)
+│   │   │   └── 2024_dmi_wind.csv          (33.3 MB)
+│   │   │
+│   │   ├── weather-temp/                  (5 files, 176 MB)
+│   │   │   ├── 2020_dmi_temp.csv          (35.2 MB)
+│   │   │   ├── 2021_dmi_temp.csv          (35.1 MB)
+│   │   │   ├── 2022_dmi_temp.csv          (35.1 MB)
+│   │   │   ├── 2023_dmi_temp.csv          (35.0 MB)
+│   │   │   └── 2024_dmi_temp.csv          (35.3 MB)
+│   │   │
+│   │   └── weather-sun/                   (5 files, 81 MB)
+│   │       ├── 2020_dmi_sun.csv           (16.3 MB)
+│   │       ├── 2021_dmi_sun.csv           (16.2 MB)
+│   │       ├── 2022_dmi_sun.csv           (16.2 MB)
+│   │       ├── 2023_dmi_sun.csv           (16.2 MB)
+│   │       └── 2024_dmi_sun.csv           (16.3 MB)
+│   │
+│   └── price/                             (empty)
+│
+├── tmp/                                (temporary files)
+│
+├── user/                                (user home directories)
+│
+└── utils/                               (utility scripts and reference data)
+    └── municipality_codes_to_coordinates.csv  (98 municipalities, lat/lon mapping)
 ```
 
 ![diagram](./assets/HDFS_strucutre_diagram.png)
