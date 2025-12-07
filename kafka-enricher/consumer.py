@@ -176,13 +176,18 @@ def archive_live_file(spark, topic, live_path, forecast_id, hdfs_namenode):
     """Archive current live directory contents to historical when new forecast cycle starts."""
     try:
         timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        now = datetime.now()
 
         # Build historical archive path
-        year = datetime.now().strftime("%Y")
-        month = datetime.now().strftime("%m")
-        # Archive to a directory named with the forecastId and timestamp
-        archive_dir_name = f"{topic}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{forecast_id[:8]}"
-        historical_path = f"{hdfs_namenode}/historical/live-archives/{year}/{topic}/{month}_historical_streaming/{archive_dir_name}"
+        year = now.strftime("%Y")
+        month = now.strftime("%m")
+        day_time = now.strftime("%d-%H-%M")  # DD-HH-MM format
+
+        # Map topic name: weather-wind → forecast-wind
+        forecast_topic = topic.replace("weather-", "forecast-")
+
+        # Variant A: /historical/archives/YYYY/MM/live/forecast-{type}/DD-HH-MM-{uuid}/
+        historical_path = f"{hdfs_namenode}/historical/archives/{year}/{month}/live/{forecast_topic}/{day_time}-{forecast_id[:8]}"
 
         print(f"[{timestamp_str}] 📦 Archiving live directory to historical...")
         print(f"[{timestamp_str}]    From: {live_path}")
@@ -399,9 +404,13 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
             historical_start = datetime.now()
             year = batch_start_time.strftime("%Y")
             month = batch_start_time.strftime("%m")
+            day_time = batch_start_time.strftime("%d-%H-%M")  # DD-HH-MM format
 
-            batch_dir_name = f"live_from_{from_str}_batch-{batch_id}_forecast-{batch_forecast_id[:8]}"
-            historical_path = f"{historical_base}/{year}/{topic}/{month}_historical_streaming/{batch_dir_name}"
+            # Map topic name: weather-wind → forecast-wind
+            forecast_topic = topic.replace("weather-", "forecast-")
+
+            # New structure: /historical/YYYY/forecast-{type}/MM/DD-HH-MM_batch-{id}_{uuid}/
+            historical_path = f"{historical_base}/{year}/{forecast_topic}/{month}/{day_time}_batch-{batch_id}_{batch_forecast_id[:8]}"
 
             print(
                 f"\n[{historical_start.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}] 📁 SINK 3/3: Writing to historical HDFS: {historical_path}")
