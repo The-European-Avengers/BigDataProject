@@ -259,6 +259,9 @@ while True:
         features = data.get("features", [])
         print(f"Fetched {len(features)} features from API")
 
+        # Filter features to Denmark only
+        features = filter_features_by_denmark(features)
+
         # Process in batches - ALL with same forecastId
         print(f"Processing and sending records to Kafka (forecastId: {forecast_id[:8]}...)...")
         sent_count = process_features_in_batches(features, forecast_id, batch_size=10000)
