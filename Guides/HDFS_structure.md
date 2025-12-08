@@ -180,6 +180,10 @@ drwxr-xr-x   - root supergroup          0 2025-11-05 13:01 /live/weather-wind
 ```text
 hdfs://namenode-g5:9000/
 │
+├── analytics/  
+│   ├── consumption_2025-12-08.parquet
+│   ├── consumption_2025-12-09.parquet
+│   └── consumption_2025-12-10.parquet 
 │
 ├── historical/                          (~11 GB - enriched data)
 │   ├── 2020/
@@ -301,6 +305,8 @@ hdfs://namenode-g5:9000/
 │               │       └── 06-00-21-97906687/
 │               │
 │               └── analytics 
+│                   ├── consumption_<UUID>.parquet
+│                   └── ...
 │
 │
 ├── live/                                  (273 MB - current forecast cycle accumulation)
