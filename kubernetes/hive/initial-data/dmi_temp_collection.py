@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 
 # CONFIGURATION
-TARGET_YEARS = [2020, 2021, 2022, 2023, 2024]  # Years to collect data for
+TARGET_YEARS = [2020, 2021, 2022, 2023, 2024, 2025]  # Years to collect data for
 
 # RUTA COMPARTIDA: Debe coincidir con el 'mountPath' en el contenedor HIVE y Collector (YAML)
 SHARED_DATA_PATH = "/shared-data-for-hive" 
