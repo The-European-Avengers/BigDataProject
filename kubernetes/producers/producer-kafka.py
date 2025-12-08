@@ -3,7 +3,10 @@ import time
 import json
 import uuid
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+import geopandas as gpd
+from shapely.geometry import Point
 
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -19,20 +22,33 @@ topic = os.getenv("TOPIC", "weather")
 bootstrap_servers = os.getenv("BOOTSTRAP_SERVERS", "kafka-g5:9092")
 poll_interval = int(os.getenv("POLL_INTERVAL", "120"))
 parameter = os.getenv("PARAMETER_NAME", "wind-speed-10m")
-
-today = datetime.now(timezone.utc).date()
-datetime_param = f"{today}T00:00:00Z/.."
-
-params = {
-    "bbox": "7.0,54.5,16.0,58.0",
-    "parameter-name": parameter,
-    "datetime": datetime_param,
-    "crs": "crs84",
-    "f": "GeoJSON",
-    "api-key": api_key
-}
+shapefile_path = os.getenv("SHAPEFILE_PATH", "./dk.shp")
 
 print(f"Starting producer for parameter: {parameter}")
+
+# ===============================================================
+# LOAD DENMARK SHAPEFILE
+# ===============================================================
+
+print(f"Loading Denmark shapefile from: {shapefile_path}")
+
+# Check if shapefile exists
+if not os.path.exists(shapefile_path):
+    print(f"✗ ERROR: Shapefile not found at {shapefile_path}")
+    print(f"  Current working directory: {os.getcwd()}")
+    print(f"  Please ensure the following files are present:")
+    print(f"    - {shapefile_path}")
+    print(f"    - {shapefile_path.replace('.shp', '.shx')}")
+    print(f"    - {shapefile_path.replace('.shp', '.dbf')}")
+    print(f"    - {shapefile_path.replace('.shp', '.prj')}")
+    print(f"\n  Set SHAPEFILE_PATH environment variable to the correct path.")
+    exit(1)
+
+dk_shape = gpd.read_file(shapefile_path)
+dk_shape = dk_shape.to_crs("EPSG:4326")  # Ensure CRS is WGS84
+dk_boundary = dk_shape.union_all()  # Updated to use union_all() instead of unary_union
+print(f"✓ Shapefile loaded successfully from {shapefile_path}")
+
 
 # ===============================================================
 # AVRO SCHEMA (WITH forecastId)
@@ -103,7 +119,8 @@ def fetch_with_retry(url, params, max_retries=3):
             print(f"Connected in {connect_time:.2f}s. Status: {response.status_code}")
 
             response.raise_for_status()
-
+            
+            # Read response in chunks to show progress
             print("Reading response...")
             content = b''
             chunk_count = 0
@@ -130,6 +147,26 @@ def fetch_with_retry(url, params, max_retries=3):
                 time.sleep(wait_time)
             else:
                 raise
+
+
+# ===============================================================
+# FILTER FEATURES BY DENMARK BOUNDARY
+# ===============================================================
+
+def filter_features_by_denmark(features):
+    """Filter features to only include points within Denmark"""
+    print("Filtering points within Denmark...")
+    filtered = []
+    
+    for f in features:
+        lon, lat = f["geometry"]["coordinates"]
+        point = Point(lon, lat)
+        
+        if dk_boundary.contains(point):
+            filtered.append(f)
+    
+    print(f"✓ Filtered: {len(filtered)} points inside Denmark (from {len(features)} total)")
+    return filtered
 
 
 # ===============================================================
@@ -160,6 +197,7 @@ def send_record(lon, lat, value, step, parameter_name, forecast_id):
         value=record,
         on_delivery=delivery_report
     )
+
 
 
 # ===============================================================
@@ -242,7 +280,7 @@ while True:
         del data
 
     except Exception as e:
-        print(f"✗ Error in main loop: {e}")
+        print(f"\n✗ Error in main loop: {e}")
         import traceback
 
         traceback.print_exc()
