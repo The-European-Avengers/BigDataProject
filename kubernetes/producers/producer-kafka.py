@@ -24,6 +24,18 @@ poll_interval = int(os.getenv("POLL_INTERVAL", "120"))
 parameter = os.getenv("PARAMETER_NAME", "wind-speed-10m")
 shapefile_path = os.getenv("SHAPEFILE_PATH", "./dk.shp")
 
+today = datetime.now(timezone.utc).date()
+datetime_param = f"{today}T00:00:00Z/.."
+
+params = {
+    "bbox": "7.0,54.5,16.0,58.0",
+    "parameter-name": parameter,
+    "datetime": datetime_param,
+    "crs": "crs84",
+    "f": "GeoJSON",
+    "api-key": api_key
+}
+
 print(f"Starting producer for parameter: {parameter}")
 
 # ===============================================================
