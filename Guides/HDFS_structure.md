@@ -242,7 +242,7 @@ hdfs://namenode-g5:9000/
 │   │   │       ├── part-00000-*.avro
 │   │   │       └── part-00001-*.avro
 │   │   │
-│   │   ├── forecast-wind/                 (NEW: live forecast batches - streaming)
+│   │   ├── forecast-wind/                 (live forecast batches - streaming)
 │   │   │   └── 12/                        (December 2025)
 │   │   │       ├── 05-16-29_batch-0_9691250b/     (Day 5, 16:29, batch 0, UUID)
 │   │   │       │   └── part-00000-*.avro
@@ -266,7 +266,7 @@ hdfs://namenode-g5:9000/
 │   │   ├── weather-temp/
 │   │   │   └── 01.avro/
 │   │   │
-│   │   ├── forecast-temp/                 (NEW: live forecast batches - streaming)
+│   │   ├── forecast-temp/                 (live forecast batches - streaming)
 │   │   │   └── 12/
 │   │   │       ├── 05-16-29_batch-0_9691250b/
 │   │   │       │   └── part-00000-*.avro
@@ -277,7 +277,7 @@ hdfs://namenode-g5:9000/
 │   │   ├── weather-sun/
 │   │   │   └── 01.avro/
 │   │   │
-│   │   └── forecast-sun/                  (NEW: live forecast batches - streaming)
+│   │   └── forecast-sun/                  (live forecast batches - streaming)
 │   │       └── 12/
 │   │           ├── 05-16-29_batch-0_9691250b/
 │   │           │   └── part-00000-*.avro
@@ -290,19 +290,25 @@ hdfs://namenode-g5:9000/
 │           └── 12/
 │               ├── live/
 │               │   ├── forecast-wind/          
-│               │   │   ├── 05-17-24-a94e5561/  # UUID cycles
-│               │   │   ├── 05-20-52-42abcd32/
-│               │   │   └── 06-00-21-97906687/
+│               │   │   ├── 05-17-24-a94e5561/    
+│               │   │   |   ├── part-00000-5e2eea47-ebd6-437c-917e-98ddf38a6251-c000.avro
+│               │   │   |   └── part-00001-5e2eea47-ebd6-437c-917e-98ddf38a6251-c000.avro
+│               │   │   ├── 05-20-52-42abcd32/    
+│               │   │   |   ├── part-00000-0103e789-4dbf-42c8-a11a-253f760aad47-c000.avro
+│               │   │   |   └── part-00001-0103e789-4dbf-42c8-a11a-253f760aad47-c000.avro
+│               │   │   └── 06-00-21-97906687/    
+│               │   │       ├── part-00000-4ae6164e-5756-448e-9ecc-d81b3bcb1875-c000.avro
+│               │   │       └── part-00001-4ae6164e-5756-448e-9ecc-d81b3bcb1875-c000.avro
 │               │   │
 │               │   ├── forecast-temp/
-│               │   │   ├── 05-17-24-a94e5561/
-│               │   │   ├── 05-20-52-42abcd32/
-│               │   │   └── 06-00-21-97906687/
+│               │   │   ├── 05-17-24-a94e5561/ ... (partitions)
+│               │   │   ├── 05-20-52-42abcd32/ ...
+│               │   │   └── 06-00-21-97906687/ ...
 │               │   │
 │               │   └── forecast-sun/
-│               │       ├── 05-17-24-a94e5561/
-│               │       ├── 05-20-52-42abcd32/
-│               │       └── 06-00-21-97906687/
+│               │       ├── 05-17-24-a94e5561/ ... (partitions)
+│               │       ├── 05-20-52-42abcd32/ ... 
+│               │       └── 06-00-21-97906687/ ...
 │               │
 │               └── analytics 
 │                   ├── consumption_<UUID>.parquet
