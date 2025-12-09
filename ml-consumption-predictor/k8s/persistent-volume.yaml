@@ -1,0 +1,14 @@
+---
+# PersistentVolumeClaim for data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: energy-data-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can read/write
+  resources:
+    requests:
+      storage: 50Gi  # Adjust based on your data size
+  storageClassName: standard  # Change to your storage class

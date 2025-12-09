@@ -1,0 +1,38 @@
+---
+# Service Account for Spark driver
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark
+  namespace: default
+
+---
+# Role for Spark driver to manage executor pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-role
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+
+---
+# Bind role to service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-role-binding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spark-role
+subjects:
+  - kind: ServiceAccount
+    name: spark
+    namespace: default
