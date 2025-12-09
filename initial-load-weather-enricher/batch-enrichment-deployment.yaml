@@ -69,6 +69,9 @@ spec:
               value: "/home/sparkuser/data/municipality_codes_to_coordinates.csv"
             - name: HADOOP_CONF_fs_defaultFS
               value: "hdfs://namenode-g5:9000"
+            - name: SKIP_EXISTING_MONTHS
+              value: "true"
+
 
           ports:
             - containerPort: 4040

@@ -123,7 +123,63 @@ def add_municipality_code_udf(lat_series: pd.Series, lon_series: pd.Series) -> p
     return pd.Series(results, dtype='int32')
 
 
-def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
+def get_existing_months(spark, hdfs_namenode, weather_type):
+    """
+    Check which year-month combinations already exist in HDFS.
+    Returns a set of (year, month) tuples.
+    """
+    existing_months = set()
+
+    try:
+        # Try to list the historical directory for this weather type
+        years_path = f"{hdfs_namenode}/historical/"
+
+        # Use Spark to check what exists
+        hadoop_conf = spark.sparkContext._jsc.hadoopConfiguration()
+        fs = spark.sparkContext._jvm.org.apache.hadoop.fs.FileSystem.get(
+            spark.sparkContext._jvm.java.net.URI(hdfs_namenode),
+            hadoop_conf
+        )
+
+        # List years (2020, 2021, etc.)
+        years_dir = spark.sparkContext._jvm.org.apache.hadoop.fs.Path(years_path)
+        if fs.exists(years_dir):
+            year_statuses = fs.listStatus(years_dir)
+
+            for year_status in year_statuses:
+                year_name = year_status.getPath().getName()
+                if year_name.isdigit():
+                    year = int(year_name)
+
+                    # Check months for this year
+                    weather_path = spark.sparkContext._jvm.org.apache.hadoop.fs.Path(
+                        f"{hdfs_namenode}/historical/{year}/{weather_type}"
+                    )
+
+                    if fs.exists(weather_path):
+                        month_statuses = fs.listStatus(weather_path)
+
+                        for month_status in month_statuses:
+                            month_name = month_status.getPath().getName()
+                            # Extract month from "01.avro", "02.avro", etc.
+                            if month_name.endswith('.avro'):
+                                month = int(month_name.split('.')[0])
+                                existing_months.add((year, month))
+
+        if existing_months:
+            print(f"  Found {len(existing_months)} existing month(s) in HDFS")
+            print(f"  Sample: {list(sorted(existing_months))[:5]}")
+        else:
+            print(f"  No existing data found - will process all months")
+
+    except Exception as e:
+        print(f"  Warning: Could not check existing data: {e}")
+        print(f"  Will process all months to be safe")
+
+    return existing_months
+
+
+def process_weather_data(spark, hdfs_namenode, weather_type, value_column, skip_existing=True):
     """
     Process a specific weather type (wind, temp, or sun)
 
@@ -132,6 +188,7 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
         hdfs_namenode: HDFS namenode URI
         weather_type: 'weather-wind', 'weather-temp', or 'weather-sun'
         value_column: Column name containing the value (e.g., 'mean_wind_speed')
+        skip_existing: If True, skip months that already exist in HDFS
     """
     input_path = f"{hdfs_namenode}/raw/initial-load/{weather_type}/*.csv"
 
@@ -139,10 +196,17 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
     print(f"Processing {weather_type}")
     print(f"Input path: {input_path}")
     print(f"Value column: {value_column}")
+    print(f"Mode: {'Incremental (skip existing)' if skip_existing else 'Full reprocess'}")
     print(f"{'=' * 60}\n")
 
+    # Check which months already exist
+    existing_months = set()
+    if skip_existing:
+        print(f"🔍 Checking for existing processed data...")
+        existing_months = get_existing_months(spark, hdfs_namenode, weather_type)
+
     # Read all CSV files for this weather type
-    print(f"📖 [1/5] Reading CSV files from HDFS...")
+    print(f"\n📖 [1/5] Reading CSV files from HDFS...")
     start_time = datetime.now()
     df = spark.read.csv(
         input_path,
@@ -174,7 +238,7 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
     enrich_time = (datetime.now() - start_time).total_seconds()
     print(f"✓ Enrichment applied in {enrich_time:.1f}s")
 
-    # Select final columns (keeping all original columns + new ones)
+    # Select final columns
     print(f"\n📋 [4/5] Selecting final columns...")
     df_final = df_enriched.select(
         "timeObserved",
@@ -191,11 +255,31 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
 
     # Get unique year-month combinations
     year_months = df_final.select("year", "month").distinct().orderBy("year", "month").collect()
-    print(f"✓ Found {len(year_months)} unique year-month combinations to process")
+
+    # Filter out existing months if skip_existing is True
+    if skip_existing:
+        original_count = len(year_months)
+        year_months = [row for row in year_months
+                       if (row["year"], row["month"]) not in existing_months]
+        skipped_count = original_count - len(year_months)
+
+        if skipped_count > 0:
+            print(f"✓ Found {original_count} total year-month combinations")
+            print(f"  → Skipping {skipped_count} existing month(s)")
+            print(f"  → Processing {len(year_months)} new month(s)")
+        else:
+            print(f"✓ Found {len(year_months)} new year-month combinations to process")
+    else:
+        print(f"✓ Found {len(year_months)} year-month combinations to process")
+
+    if not year_months:
+        print(f"\n✅ No new data to process for {weather_type}")
+        return
 
     # Show year range
     years = sorted(set(row["year"] for row in year_months))
-    print(f"  Years: {years[0]} - {years[-1]}")
+    if years:
+        print(f"  Years to process: {years[0]} - {years[-1]}")
 
     # Process each year-month combination
     print(f"\n💾 [5/5] Writing AVRO files to HDFS...")
@@ -208,7 +292,7 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
         # Filter data for this year-month
         partition_df = df_final.filter(
             (col("year") == year_val) & (col("month") == month_val)
-        ).drop("year", "month")  # Drop the partition columns from final output
+        ).drop("year", "month")
 
         # Output path: /historical/YYYY/weather-type/MM.avro
         output_path = f"{hdfs_namenode}/historical/{year_val}/{weather_type}/{month_val:02d}.avro"
@@ -227,7 +311,7 @@ def process_weather_data(spark, hdfs_namenode, weather_type, value_column):
         print(f"      ✓ Completed in {write_time:.1f}s → {output_path}")
 
     total_time = (datetime.now() - total_start).total_seconds()
-    print(f"\n✓ All {len(year_months)} files written in {total_time:.1f}s")
+    print(f"\n✓ All {len(year_months)} new file(s) written in {total_time:.1f}s")
     print(f"✓ Completed processing {weather_type}\n")
 
 
@@ -242,9 +326,13 @@ def main():
     municipality_csv_hdfs = os.getenv("MUNICIPALITY_CSV_HDFS",
                                       "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv")
 
+    # NEW: Add environment variable to control incremental mode
+    skip_existing = os.getenv("SKIP_EXISTING_MONTHS", "true").lower() == "true"
+
     print(f"\nConfiguration:")
     print(f"  HDFS Namenode: {hdfs_namenode}")
     print(f"  Municipality CSV (HDFS): {municipality_csv_hdfs}")
+    print(f"  Skip Existing Months: {skip_existing}")
     print()
 
     # Create Spark Session
@@ -287,7 +375,8 @@ def main():
             type_start = datetime.now()
 
             try:
-                process_weather_data(spark, hdfs_namenode, weather_type, value_column)
+                process_weather_data(spark, hdfs_namenode, weather_type, value_column,
+                                     skip_existing=skip_existing)
 
                 type_time = (datetime.now() - type_start).total_seconds()
                 print(f"✅ {weather_type} completed in {type_time:.1f}s")
@@ -296,7 +385,6 @@ def main():
                 print(f"❌ ERROR processing {weather_type}: {e}")
                 import traceback
                 traceback.print_exc()
-                # Continue with next weather type instead of failing entire job
 
         overall_time = (datetime.now() - overall_start).total_seconds()
         minutes = int(overall_time // 60)
