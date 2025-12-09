@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-historical-producer-wind
+  namespace: bd-bd-gr-05
+data:
+  PARAMETER_ID: "mean_wind_speed"
+  VALUE_FIELD_NAME: "mean_wind_speed"
+  TOPIC: "historical-weather-wind"
+  BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
+  SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  POLL_INTERVAL: "86400"  # 24 hours - runs once per day
+  API_KEY: "d36196e2-2a58-4497-bf28-f71d18c427a1"
+  SHAPEFILE_PATH: "/app/dk.shp"
+  RUN_ONCE: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-historical-producer-temp
+  namespace: bd-bd-gr-05
+data:
+  PARAMETER_ID: "temp_mean_past1h"
+  VALUE_FIELD_NAME: "temp_mean_past1h"
+  TOPIC: "historical-weather-temp"
+  BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
+  SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  POLL_INTERVAL: "86400"  # 24 hours - runs once per day
+  API_KEY: "d36196e2-2a58-4497-bf28-f71d18c427a1"
+  SHAPEFILE_PATH: "/app/dk.shp"
+  RUN_ONCE: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-historical-producer-sun
+  namespace: bd-bd-gr-05
+data:
+  PARAMETER_ID: "mean_radiation"
+  VALUE_FIELD_NAME: "mean_radiation"
+  TOPIC: "historical-weather-sun"
+  BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
+  SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  POLL_INTERVAL: "86400"  # 24 hours - runs once per day
+  API_KEY: "d36196e2-2a58-4497-bf28-f71d18c427a1"
+  SHAPEFILE_PATH: "/app/dk.shp"
+  RUN_ONCE: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-producer-wind-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-historical-producer-wind-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-producer-wind-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/historical-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-historical-producer-wind
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-producer-temp-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-historical-producer-temp-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-producer-temp-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/historical-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-historical-producer-temp
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-producer-sun-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-historical-producer-sun-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-producer-sun-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/historical-data-producers:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-historical-producer-sun
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry
