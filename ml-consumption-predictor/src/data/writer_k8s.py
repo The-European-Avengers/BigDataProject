@@ -52,8 +52,8 @@ class K8sDataWriter:
         
         # Select columns for output
         output_df = predictions_df.select(
-            F.col("timestamp"),
-            F.col("municipalityCode"),
+            F.col("timestamp"), 
+            F.col("municipalityCode"), #int
             F.col("consumptionkWh"),
             F.col("mean_temp"),
             F.col("mean_radiation"),

@@ -1,0 +1,81 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: energy-ml-spark-test
+  namespace: bd-bd-gr-05
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: energy-ml-spark-test
+    spec:
+      restartPolicy: Never
+      serviceAccountName: spark
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: test
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:latest
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -ex
+              echo "=== Starting diagnostic test ==="
+              
+              echo "=== 1. Checking Python ==="
+              python --version || echo "Python failed"
+              which python || echo "Python not in PATH"
+              
+              echo "=== 2. Checking Spark ==="
+              which spark-submit || echo "spark-submit not found"
+              ls -la /opt/spark/bin/ || echo "Spark bin directory not found"
+              
+              echo "=== 3. Checking main.py ==="
+              if [ -f /opt/spark/work-dir/src/main.py ]; then
+                echo "main.py EXISTS"
+                head -20 /opt/spark/work-dir/src/main.py
+              else
+                echo "main.py NOT FOUND"
+                echo "Listing /opt/spark/work-dir:"
+                ls -la /opt/spark/work-dir/ || echo "work-dir not found"
+              fi
+              
+              echo "=== 4. Testing spark-submit with simple script ==="
+              cat > /tmp/test.py << 'PYEOF'
+              from pyspark.sql import SparkSession
+              print("Creating Spark session...")
+              spark = SparkSession.builder.appName("test").getOrCreate()
+              print("Spark session created successfully!")
+              spark.stop()
+              PYEOF
+              
+              echo "Running spark-submit..."
+              spark-submit \
+                --master local[1] \
+                --driver-memory 1g \
+                /tmp/test.py || echo "spark-submit FAILED with exit code $?"
+              
+              echo "=== Test complete ==="
+              sleep 30
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          envFrom:
+            - configMapRef:
+                name: energy-ml-config
+          volumeMounts:
+            - name: data-volume
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "1000m"
+              memory: "3Gi"
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: energy-data-pvc

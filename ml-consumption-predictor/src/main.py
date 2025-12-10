@@ -178,7 +178,7 @@ def run_spark_job(
         logger.info("STEP 1: Loading Training Data")
         logger.info("=" * 80)
         
-        training_data = loader.load_complete_training_data(training_years)
+        training_data = loader.load_complete_training_data(training_years, final_prediction_dates[0][0])
         
         logger.info("✓ Training data loaded successfully\n")
         

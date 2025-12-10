@@ -218,32 +218,46 @@ class LocalDataLoader:
     
     def load_complete_training_data(
         self,
-        requested_years: int
+        requested_years: int,
+        prediction_year: int
     ) -> Dict[str, DataFrame]:
         """
         Load complete training data with validation
         
+        IMPORTANT: Loads historical years EXCLUDING current year for training,
+        then adds current year for trend calculation.
+        
+        For example, if current year is 2024 and requested_years=2:
+        - Loads 2022, 2023 for model training
+        - Adds 2024 for year-over-year trend calculation
+        
         Args:
-            requested_years: Number of years to attempt loading
+            requested_years: Number of historical years to load (excluding current year)
         
         Returns:
             Dictionary with 'consumption', 'temp', 'sun', 'wind' DataFrames
         """
-        from datetime import datetime
         
-        current_year = datetime.now().year
-        years = list(range(current_year - requested_years, current_year))
+        # Training years: exclude current year
+        # For requested_years=2 in 2024: [2022, 2023]
+        training_years = list(range(prediction_year - requested_years, prediction_year))
         
-        logger.info(f"Attempting to load {requested_years} years: {years}")
+        # All years including current for trend calculation
+        # For requested_years=2 in 2024: [2022, 2023, 2024]
+        all_years = list(range(prediction_year - requested_years, prediction_year + 1))
         
-        # Load all data
-        consumption_df = self.load_historical_consumption(years)
-        temp_df = self.load_historical_weather(years, 'temperature-2m')
-        sun_df = self.load_historical_weather(years, 'direct-solar-exposure')
+        logger.info(f"Attempting to load {requested_years} training years: {training_years}")
+        logger.info(f"Plus current year {prediction_year} for trend calculation")
+        logger.info(f"Total years to load: {all_years}")
+        
+        # Load all data (including current year for trends)
+        consumption_df = self.load_historical_consumption(all_years)
+        temp_df = self.load_historical_weather(all_years, 'temperature-2m')
+        sun_df = self.load_historical_weather(all_years, 'direct-solar-exposure')
         
         # Wind is optional
         try:
-            wind_df = self.load_historical_weather(years, 'wind-speed-10m')
+            wind_df = self.load_historical_weather(all_years, 'wind-speed-10m')
         except Exception as e:
             logger.warning(f"Wind data not available: {e}")
             wind_df = None
@@ -256,7 +270,7 @@ class LocalDataLoader:
         valid_start, valid_end, actual_years = DataValidator.find_valid_date_range(
             consumption_df,
             weather_dfs,
-            requested_years
+            requested_years + 1  # +1 because we loaded current year too
         )
         
         # Filter to valid range

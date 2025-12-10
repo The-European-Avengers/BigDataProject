@@ -4,12 +4,12 @@ apiVersion: sparkoperator.k8s.io/v1beta2
 kind: SparkApplication
 metadata:
   name: energy-ml-predictor-manual
-  namespace: default
+  namespace: bd-bd-gr-05
 spec:
   type: Python
   pythonVersion: "3"
   mode: cluster
-  image: "your-registry/energy-ml-predictor:latest"
+  image: "registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:latest"
   imagePullPolicy: Always
   mainApplicationFile: "local:///opt/spark/work-dir/src/main.py"
   
@@ -30,8 +30,8 @@ spec:
     onFailureRetryInterval: 60
   
   driver:
-    cores: 2
-    memory: "4g"
+    cores: 4
+    memory: "8g"
     labels:
       app: energy-ml-predictor
       component: driver
@@ -47,9 +47,9 @@ spec:
           name: energy-ml-config
   
   executor:
-    cores: 2
+    cores: 4
     instances: 2
-    memory: "4g"
+    memory: "8g"
     labels:
       app: energy-ml-predictor
       component: executor
