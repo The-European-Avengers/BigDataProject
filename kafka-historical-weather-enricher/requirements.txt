@@ -1,0 +1,7 @@
+pyspark==3.4.1
+pandas
+numpy
+pyarrow
+fastavro
+confluent-kafka==2.2.0
+requests
