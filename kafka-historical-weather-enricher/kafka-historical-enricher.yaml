@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-weather-enricher
+  namespace: bd-bd-gr-05
+  labels:
+    app: kafka-historical-weather-enricher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-historical-weather-enricher
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-weather-enricher
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+
+      containers:
+        - name: kafka-historical-weather-enricher
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-historical-weather-enricher:latest
+          imagePullPolicy: Always
+          env:
+            # Kafka Configuration
+            - name: BOOTSTRAP_SERVERS
+              value: "kafka-g5-controller-headless:9092"
+            - name: SCHEMA_REGISTRY_URL
+              value: "http://schema-registry:8081"
+            
+            # Checkpoint Configuration
+            - name: CHECKPOINT_ROOT
+              value: "/tmp/spark/checkpoints/historical_enricher_v5"
+            
+            # HDFS Configuration
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+            - name: HADOOP_CONF_fs_defaultFS
+              value: "hdfs://namenode-g5:9000"
+            
+            # Municipality lookup CSV
+            - name: MUNICIPALITY_CSV_HDFS
+              value: "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"
+            
+            # Trigger interval (how often to check for new data)
+            - name: TRIGGER_INTERVAL
+              value: "60 seconds"
+            
+          ports:
+            - containerPort: 4040
+              name: spark-ui
+          
+          readinessProbe:
+            exec:
+              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-historical-weather-enricher
+  namespace: bd-bd-gr-05
+  labels:
+    app: kafka-historical-weather-enricher
+spec:
+  selector:
+    app: kafka-historical-weather-enricher
+  ports:
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  type: ClusterIP
