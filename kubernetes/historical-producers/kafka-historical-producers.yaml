@@ -20,8 +20,8 @@ metadata:
   name: kafka-historical-producer-temp
   namespace: bd-bd-gr-05
 data:
-  PARAMETER_ID: "temp_mean_past1h"
-  VALUE_FIELD_NAME: "temp_mean_past1h"
+  PARAMETER_ID: "mean_temp"
+  VALUE_FIELD_NAME: "mean_temp"
   TOPIC: "historical-weather-temp"
   BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
   SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
