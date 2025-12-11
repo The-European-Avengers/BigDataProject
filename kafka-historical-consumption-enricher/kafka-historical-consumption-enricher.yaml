@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-consumption-enricher
+  namespace: bd-bd-gr-05
+  labels:
+    app: kafka-historical-consumption-enricher
+spec:
+  replicas: 1  # MUST BE 1 - stateful streaming with checkpoints
+  selector:
+    matchLabels:
+      app: kafka-historical-consumption-enricher
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-consumption-enricher
+    spec:
+      serviceAccountName: spark
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+      - name: spark-consumption-enricher
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-historical-consumption-enricher:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        env:
+        - name: BOOTSTRAP_SERVERS
+          value: "kafka-g5-controller-headless:9092"
+        - name: SCHEMA_REGISTRY_URL
+          value: "http://schema-registry:8081"
+        - name: HDFS_NAMENODE
+          value: "hdfs://namenode-g5:9000"
+        - name: CHECKPOINT_ROOT
+          value: "/tmp/spark/checkpoints/historical_consumption_enricher_v2"
+        - name: TRIGGER_INTERVAL
+          value: "1 day"
+        - name: MUNICIPALITY_CSV_HDFS
+          value: "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-historical-consumption-enricher
+  namespace: bd-bd-gr-05
+  labels:
+    app: kafka-historical-consumption-enricher
+spec:
+  selector:
+    app: kafka-historical-consumption-enricher
+  ports:
+  - name: spark-ui
+    protocol: TCP
+    port: 4040
+    targetPort: 4040
+  type: ClusterIP
