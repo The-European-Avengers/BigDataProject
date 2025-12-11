@@ -10,8 +10,6 @@
 6. [Verification](#verification)
 7. [Quick Reference](#quick-reference)
 8. [Troubleshooting](#troubleshooting)
-9. [Notes](#notes)
-
 ---
 
 ## Quick Start
@@ -164,10 +162,10 @@ Process:
 **Write:** Batch overwrite of monthly files
 
 **Why This Approach?**
-- ✅ Stream processing for real-time enrichment
-- ✅ Monthly files for efficient analytics queries
-- ✅ Automatic deduplication on every batch
-- ✅ No small file problem (one file per month)
+- Stream processing for real-time enrichment
+- Monthly files for efficient analytics queries
+- Automatic deduplication on every batch
+- No small file problem (one file per month)
 
 ### 3. Schema Evolution with Avro
 
@@ -412,63 +410,6 @@ kubectl logs --tail=100 deployment/kafka-historical-weather-enricher -n bd-bd-gr
 kubectl logs --previous deployment/kafka-historical-weather-enricher -n bd-bd-gr-05
 ```
 
-**Key Log Patterns:**
-
-**✅ Successful Startup:**
-```
-HISTORICAL WEATHER DATA SPARK CONSUMER
-Topics: historical-weather-wind, historical-weather-temp, historical-weather-sun
-HDFS: hdfs://namenode-g5:9000/historical/<year>/<weather-type>/<month>.avro
-Checkpoint: /tmp/spark/checkpoints/historical_enricher_v4
-
-📍 Initializing municipality lookup...
-✓ Successfully loaded 311 municipalities from HDFS
-
-🚀 STARTING STREAM FOR: historical-weather-wind
-✓ Successfully fetched schema for historical-weather-wind-value
-✓ Stream configured for historical-weather-wind
-✓ Enrichment UDFs applied
-✓ Stream started: historical-weather-wind -> HDFS
-```
-
-**✅ Batch Processing:**
-```
-========== BATCH 5 START (historical-weather-wind) ==========
-📥 Received 3,000 records
-📅 Processing 1 year/month combination(s)
-
-📁 Processing 2025-12...
-  📊 New records: 3,000
-  📂 Found existing data at hdfs://.../2025/weather-wind/12.avro
-  📊 Existing records: 10,335
-  🔗 Combined with existing data
-  ✓ After deduplication: 12,282 records
-  🗑️  Deleted: hdfs://.../2025/weather-wind/12.avro
-  💾 Written to HDFS: hdfs://.../2025/weather-wind/12.avro (3.45s)
-
-✅ BATCH 5 COMPLETED in 8.23s
-   └─ Total records in HDFS: 12,282
-```
-
-**❌ Error Patterns:**
-```
-# Kafka connection failed
-org.apache.kafka.common.errors.TimeoutException: 
-  Failed to update metadata after 60000 ms.
-
-# HDFS connection failed
-java.net.ConnectException: Call From ... to namenode-g5:9000 failed
-
-# Schema Registry unavailable
-Failed to fetch schema for historical-weather-wind-value: 
-  Connection refused
-
-# Avro deserialization error (missing header strip)
-org.apache.avro.AvroRuntimeException: Malformed data. Length is negative
-
-# Race condition error (missing cache)
-org.apache.spark.SparkFileNotFoundException: File does not exist
-```
 
 ### 3. Resource Usage
 
