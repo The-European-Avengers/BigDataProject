@@ -212,13 +212,15 @@ hdfs://namenode-g5:9000/
 │   │   │   ├── 02.avro/
 │   │   │   └── ... (12 months)
 │   │   ├── weather-temp/
-│   │   └── weather-sun/
+│   │   ├── weather-sun/                   (12 months)
+│   │   └── price.avro
 │   │
 │   ├── 2021/
 │   │   ├── production/                    (12 months: 01-12)
 │   │   ├── weather-wind/
 │   │   ├── weather-temp/
-│   │   └── weather-sun/
+│   │   ├── weather-sun/                   (12 months)
+│   │   └── price.avro
 │   │
 │   ├── 2022/
 │   │   ├── consumption/                   (5 months: 08-12)
@@ -240,7 +242,8 @@ hdfs://namenode-g5:9000/
 │   │   │   ├── ...
 │   │   │   └── 12.avro/
 │   │   ├── weather-temp/                  (12 months)
-│   │   └── weather-sun/                   (12 months)
+│   │   ├── weather-sun/                   (12 months)
+│   │   └── price.avro
 │   │
 │   ├── 2023/
 │   │   ├── consumption/                   (12 months: 01-12)
@@ -251,7 +254,8 @@ hdfs://namenode-g5:9000/
 │   │   │   └── 12.avro/
 │   │   ├── weather-wind/                  (12 months)
 │   │   ├── weather-temp/                  (12 months)
-│   │   └── weather-sun/                   (12 months)
+│   │   ├── weather-sun/                   (12 months)
+│   │   └── price.avro
 │   │
 │   ├── 2024/
 │   │   ├── consumption/                   (12 months: 01-12)
@@ -262,7 +266,8 @@ hdfs://namenode-g5:9000/
 │   │   │   └── 12.avro/
 │   │   ├── weather-wind/                  (12 months)
 │   │   ├── weather-temp/                  (12 months)
-│   │   └── weather-sun/                   (12 months)
+│   │   ├── weather-sun/                   (12 months)
+│   │   └── price.avro
 │   │
 │   ├── 2025/
 │   │   ├── consumption/                   (11 months: 01-11 - batch processed)
