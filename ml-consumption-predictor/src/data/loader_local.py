@@ -34,14 +34,13 @@ class LocalDataLoader:
         """
         Load historical consumption data from CSV files
         
-        Schema: consumptionKwh, heatingCategory, housingCategory, municipality,
-                municipalityCode, regionName, timeDK, timeUTC, dkArea
+        NEW Schema: datetime, municipalityCode, consumptionKwh, timeDK, municipality, regionName, dkArea
         
         Args:
             years: List of years to load
         
         Returns:
-            Spark DataFrame with consumption data
+            Spark DataFrame with consumption data (with timeDK column for compatibility)
         """
         logger.info(f"Loading consumption data for years: {years}")
         
@@ -56,9 +55,19 @@ class LocalDataLoader:
             try:
                 df = self.spark.read.csv(path, header=True, inferSchema=True)
                 
-                # Parse timestamps
-                df = df.withColumn("timeDK", F.to_timestamp("timeDK"))
-                df = df.withColumn("timeUTC", F.to_timestamp("timeUTC"))
+                # Parse timestamps - new schema has both datetime and timeDK
+                if "datetime" in df.columns:
+                    df = df.withColumn("datetime", F.to_timestamp("datetime"))
+                
+                if "timeDK" in df.columns:
+                    df = df.withColumn("timeDK", F.to_timestamp("timeDK"))
+                elif "datetime" in df.columns:
+                    # If only datetime exists, create timeDK from it
+                    df = df.withColumn("timeDK", F.col("datetime"))
+                
+                # Ensure consumptionKwh column exists (capital K in new schema)
+                if "consumptionKwh" in df.columns and "consumptionKwh" not in df.columns:
+                    df = df.withColumnRenamed("consumptionKwh", "consumptionKwh")
                 
                 dfs.append(df)
                 logger.debug(f"Loaded {path}: {df.count()} records")
@@ -233,6 +242,7 @@ class LocalDataLoader:
         
         Args:
             requested_years: Number of historical years to load (excluding current year)
+            prediction_year: The year we're making predictions for
         
         Returns:
             Dictionary with 'consumption', 'temp', 'sun', 'wind' DataFrames

@@ -23,8 +23,10 @@ class FeatureEngineering:
         """
         Merge consumption with weather data
         
+        NEW consumption schema: datetime, municipalityCode, consumptionKwh, timeDK, municipality, regionName, dkArea
+        
         Args:
-            consumption_df: Consumption DataFrame (timeDK, municipalityCode, consumptionKwh, ...)
+            consumption_df: Consumption DataFrame (with timeDK, municipalityCode, consumptionKwh)
             temp_df: Temperature DataFrame (timestamp, municipalityCode, mean_temp, ...)
             sun_df: Sunlight DataFrame (timestamp, municipalityCode, mean_radiation, ...)
         
@@ -132,6 +134,8 @@ class FeatureEngineering:
         """
         Create seasonal lag features from previous year
         
+        NEW: Uses consumptionKwh column (capital K)
+        
         Args:
             df: Input DataFrame with consumption data (must have consumptionKwh column)
         
@@ -200,7 +204,7 @@ class FeatureEngineering:
         # Add interaction features
         forecast_df = FeatureEngineering.create_interaction_features(forecast_df)
         
-        # Calculate historical averages for lag features
+        # Calculate historical averages for lag features (use consumptionKwh with capital K)
         historical_avg = historical_df.groupBy("municipalityCode") \
             .agg(F.avg("consumptionKwh").alias("avg_consumption"))
         

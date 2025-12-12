@@ -211,7 +211,7 @@ mkdir -p data/analytics
 
 **Consumption** (`data/csvs/consumption/2023.csv`):
 ```csv
-ConsumptionkWh,Municipality,MunicipalityCode,RegionName,TimeDK,TimeUTC
+consumptionKwh,Municipality,MunicipalityCode,RegionName,TimeDK,TimeUTC
 1500.5,København,101,Region Hovedstaden,2023-01-01T00:00:00,2023-01-01T00:00:00
 1450.2,København,101,Region Hovedstaden,2023-01-01T01:00:00,2023-01-01T01:00:00
 ...
