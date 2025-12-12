@@ -18,4 +18,3 @@ authlib
 
 pytz
 
-confluent_kafka
