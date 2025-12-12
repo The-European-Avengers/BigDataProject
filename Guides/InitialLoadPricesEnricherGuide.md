@@ -21,7 +21,7 @@ This batch job processes historical electricity price data from raw CSV files an
 
 3. **Rename price column:**
    - From: `"Day-ahead Price (EUR/MWh)"`
-   - To: `"price (EUR/MWh)"`
+   - To: `"price_EUR_MWh"`
    - Type: DOUBLE
 
 4. **Merge DK1 and DK2** files per year
@@ -33,7 +33,7 @@ This batch job processes historical electricity price data from raw CSV files an
 ```
 timestamp: timestamp (Spark TIMESTAMP)
 dkArea: integer (1 or 2)
-price (EUR/MWh): double
+price_EUR_MWh: double
 ```
 
 ## Files
