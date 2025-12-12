@@ -204,6 +204,7 @@ hdfs://namenode-g5:9000/
 │
 ├── historical/                          (~11 GB - enriched data)
 │   ├── 2020/
+│   │   ├── production/                    (12 months: 01-12)
 │   │   ├── weather-wind/
 │   │   │   ├── 01.avro/                 (historical observations - batch job)
 │   │   │   │   ├── part-00000-*.avro
@@ -214,6 +215,7 @@ hdfs://namenode-g5:9000/
 │   │   └── weather-sun/
 │   │
 │   ├── 2021/
+│   │   ├── production/                    (12 months: 01-12)
 │   │   ├── weather-wind/
 │   │   ├── weather-temp/
 │   │   └── weather-sun/
@@ -227,6 +229,11 @@ hdfs://namenode-g5:9000/
 │   │   │   ├── 10.avro/
 │   │   │   ├── 11.avro/
 │   │   │   └── 12.avro/
+│   │   ├── production/                    (12 months: 01-12)
+│   │   │   ├── 01.avro/
+│   │   │   │   └── part-00000-*.avro
+│   │   │   ├── ...
+│   │   │   └── 12.avro/
 │   │   ├── weather-wind/                  (12 months: 01-12)
 │   │   │   ├── 01.avro/
 │   │   │   ├── 02.avro/
@@ -237,12 +244,22 @@ hdfs://namenode-g5:9000/
 │   │
 │   ├── 2023/
 │   │   ├── consumption/                   (12 months: 01-12)
+│   │   ├── production/                    (12 months: 01-12)
+│   │   │   ├── 01.avro/
+│   │   │   ├── 02.avro/
+│   │   │   ├── ...
+│   │   │   └── 12.avro/
 │   │   ├── weather-wind/                  (12 months)
 │   │   ├── weather-temp/                  (12 months)
 │   │   └── weather-sun/                   (12 months)
 │   │
 │   ├── 2024/
 │   │   ├── consumption/                   (12 months: 01-12)
+│   │   ├── production/                    (12 months: 01-12)
+│   │   │   ├── 01.avro/
+│   │   │   ├── 02.avro/
+│   │   │   ├── ...
+│   │   │   └── 12.avro/
 │   │   ├── weather-wind/                  (12 months)
 │   │   ├── weather-temp/                  (12 months)
 │   │   └── weather-sun/                   (12 months)
@@ -250,6 +267,13 @@ hdfs://namenode-g5:9000/
 │   ├── 2025/
 │   │   ├── consumption/                   (11 months: 01-11 - batch processed)
 │   │   │   ├── 01.avro/
+│   │   │   ├── 02.avro/
+│   │   │   ├── ...
+│   │   │   └── 11.avro/
+│   │   │
+│   │   ├── production/                    (12 month: 01-12 - batch processed)
+│   │   │   └── 01.avro/
+│   │   │       └── part-00000-*.avro
 │   │   │   ├── 02.avro/
 │   │   │   ├── ...
 │   │   │   └── 11.avro/
@@ -395,7 +419,10 @@ hdfs://namenode-g5:9000/
 ├── user/                                  (user home directories)
 │
 └── utils/                                 (utility scripts and reference data)
-    └── municipality_codes_to_coordinates.csv  (98 municipalities, lat/lon mapping)
+    ├── municipality_codes_to_coordinates.csv  (98 municipalities, lat/lon mapping)
+    ├── solar_panels.csv                       (solar capacity by municipality)
+    ├── wind_mills.csv                         (wind capacity by municipality)
+    └── production_job_state.txt               (last processed timestamp for production job)
 ```
                                    
 ![diagram](./assets/HDFS_strucutre_diagram.png)
