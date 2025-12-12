@@ -62,7 +62,7 @@ spec:
             - name: HADOOP_CONF_fs_defaultFS
               value: "hdfs://namenode-g5:9000"
             - name: SLEEP_INTERVAL_HOURS
-              value: "24"
+              value: "6"
 
           ports:
             - containerPort: 4040
