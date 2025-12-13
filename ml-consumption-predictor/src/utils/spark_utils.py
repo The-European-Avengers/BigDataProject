@@ -54,6 +54,11 @@ class SparkSessionManager:
         conf.set("spark.sql.adaptive.enabled", "true")
         conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
         
+        # Disable Arrow to avoid compatibility issues
+        # Arrow can cause "sun.misc.Unsafe" errors on some systems
+        conf.set("spark.sql.execution.arrow.pyspark.enabled", "false")
+        conf.set("spark.sql.execution.arrow.pyspark.fallback.enabled", "true")
+        
         # Avro support
         conf.set("spark.jars.packages", "org.apache.spark:spark-avro_2.12:3.5.0")
         
@@ -73,6 +78,7 @@ class SparkSessionManager:
         
         logger.info(f"Spark session created: {spark.version}")
         logger.info(f"Spark master: {spark.conf.get('spark.master')}")
+        logger.info(f"Arrow enabled: {spark.conf.get('spark.sql.execution.arrow.pyspark.enabled')}")
         
         return spark
     

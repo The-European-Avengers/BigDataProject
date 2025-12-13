@@ -1,5 +1,6 @@
 """
 Main Spark Job entry point for Energy Consumption ML Predictor
+Now includes price prediction based on consumption and production
 """
 
 import logging
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 def parse_args():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Energy Consumption ML Predictor - Spark Job'
+        description='Energy Consumption & Price ML Predictor - Spark Job'
     )
     
     parser.add_argument(
@@ -132,7 +133,7 @@ def run_spark_job(
     """
     try:
         logger.info("=" * 80)
-        logger.info("ENERGY CONSUMPTION ML PREDICTOR - SPARK JOB")
+        logger.info("ENERGY CONSUMPTION & PRICE ML PREDICTOR - SPARK JOB")
         logger.info("=" * 80)
         logger.info(f"Mode: {mode.value}")
         logger.info(f"Training years: {training_years}")
@@ -148,6 +149,9 @@ def run_spark_job(
         from src.data.writer_k8s import K8sDataWriter
         from src.models.trainer import ModelTrainer
         from src.models.predictor import EnergyPredictor
+        from src.models.price_trainer import PriceModelTrainer
+        from src.models.price_predictor import PricePredictor
+        from src.production.calculator import ProductionCalculator
         
         # Initialize loader and writer based on mode
         if mode == DeploymentMode.LOCAL:
@@ -182,58 +186,122 @@ def run_spark_job(
         
         logger.info("✓ Training data loaded successfully\n")
         
-        # STEP 2: Train model
+        # STEP 2: Train consumption model
         logger.info("=" * 80)
-        logger.info("STEP 2: Training Model")
+        logger.info("STEP 2: Training Consumption Model")
         logger.info("=" * 80)
         
-        trainer = ModelTrainer()
-        model, trend_multipliers = trainer.train(training_data)
+        consumption_trainer = ModelTrainer()
+        consumption_models, trend_multipliers = consumption_trainer.train(training_data)
         
-        logger.info("✓ Model trained successfully\n")
+        logger.info("✓ Consumption model trained successfully\n")
         
-        # STEP 3: Load forecast data
+        # STEP 3: Train price models
         logger.info("=" * 80)
-        logger.info("STEP 3: Loading Forecast Data")
+        logger.info("STEP 3: Training Price Models")
+        logger.info("=" * 80)
+        
+        price_trainer = PriceModelTrainer()
+        price_models = price_trainer.train(
+            training_data['consumption'],
+            training_data['production'],
+            training_data['price']
+        )
+        
+        logger.info("✓ Price models trained successfully\n")
+        
+        # STEP 4: Load forecast data
+        logger.info("=" * 80)
+        logger.info("STEP 4: Loading Forecast Weather Data")
         logger.info("=" * 80)
         
         # Pass specific_dates to loader for smart forecast loading
         temp_forecast = loader.load_forecast_weather(
             'temperature-2m',
-            specific_dates=prediction_dates  # Will trigger special logic in K8s mode
+            specific_dates=prediction_dates
         )
         sun_forecast = loader.load_forecast_weather(
             'direct-solar-exposure',
             specific_dates=prediction_dates
         )
         
+        # Wind is optional
+        try:
+            wind_forecast = loader.load_forecast_weather(
+                'wind-speed-10m',
+                specific_dates=prediction_dates
+            )
+        except Exception as e:
+            logger.warning(f"Wind forecast not available: {e}")
+            wind_forecast = None
+        
         logger.info("✓ Forecast data loaded successfully\n")
         
-        # STEP 4: Generate predictions
+        # STEP 5: Generate consumption predictions
         logger.info("=" * 80)
-        logger.info("STEP 4: Generating Predictions")
+        logger.info("STEP 5: Generating Consumption Predictions")
         logger.info("=" * 80)
         
-        predictor = EnergyPredictor(
-            model,
+        consumption_predictor = EnergyPredictor(
+            consumption_models,
             trend_multipliers,
             training_data['consumption']
         )
         
-        predictions_df = predictor.predict(temp_forecast, sun_forecast)
+        consumption_predictions = consumption_predictor.predict(temp_forecast, sun_forecast)
         
-        logger.info("✓ Predictions generated successfully\n")
+        logger.info("✓ Consumption predictions generated successfully\n")
         
-        # STEP 5: Write predictions for each day
+        # STEP 6: Calculate production from forecast
         logger.info("=" * 80)
-        logger.info("STEP 5: Writing Predictions")
+        logger.info("STEP 6: Calculating Production from Forecast")
+        logger.info("=" * 80)
+        
+        prod_calculator = ProductionCalculator(spark_manager.get_spark_session())
+        production_predictions = prod_calculator.calculate_production(
+            temp_forecast,
+            sun_forecast,
+            wind_forecast
+        )
+        
+        logger.info("✓ Production calculated successfully\n")
+        
+        # STEP 7: Generate price predictions
+        logger.info("=" * 80)
+        logger.info("STEP 7: Generating Price Predictions")
+        logger.info("=" * 80)
+        
+        price_predictor = PricePredictor(price_models)
+        price_predictions = price_predictor.predict(
+            consumption_predictions,
+            production_predictions
+        )
+        
+        logger.info("✓ Price predictions generated successfully\n")
+        
+        # STEP 8: Merge consumption, production, and price predictions
+        logger.info("=" * 80)
+        logger.info("STEP 8: Merging Predictions")
+        logger.info("=" * 80)
+        
+        final_predictions = merge_predictions(
+            consumption_predictions,
+            production_predictions,
+            price_predictions
+        )
+        
+        logger.info("✓ Predictions merged successfully\n")
+        
+        # STEP 9: Write predictions for each day
+        logger.info("=" * 80)
+        logger.info("STEP 9: Writing Predictions")
         logger.info("=" * 80)
         
         for year, month, day in final_prediction_dates:
             logger.info(f"Writing predictions for {year}-{month:02d}-{day:02d}...")
             
             # Filter predictions for this day
-            day_predictions = predictions_df.filter(
+            day_predictions = final_predictions.filter(
                 (F.year("timestamp") == year) &
                 (F.month("timestamp") == month) &
                 (F.dayofmonth("timestamp") == day)
@@ -265,6 +333,77 @@ def run_spark_job(
         # Clean up Spark session
         logger.info("\nCleaning up resources...")
         spark_manager.stop()
+
+
+def merge_predictions(
+    consumption_df,
+    production_df,
+    price_df
+):
+    """
+    Merge consumption, production, and price predictions
+    
+    Args:
+        consumption_df: Consumption predictions (timestamp, municipalityCode, consumptionkWh, ...)
+        production_df: Production calculations (timeObserved, municipalityCode, 
+                                               windProductionKwh, sunProductionKwh, productionKwh)
+        price_df: Price predictions (timestamp, dkArea, price)
+    
+    Returns:
+        Merged DataFrame with all predictions
+    """
+    logger.info("Merging consumption, production, and price predictions...")
+    
+    # Drop placeholder columns from consumption predictions (old code created these with 0.0)
+    if "productionkWh" in consumption_df.columns:
+        consumption_df = consumption_df.drop("productionkWh")
+    if "price" in consumption_df.columns:
+        consumption_df = consumption_df.drop("price")
+    
+    # Ensure dkArea in consumption
+    if "dkArea" not in consumption_df.columns:
+        consumption_df = consumption_df.withColumn(
+            "dkArea",
+            F.when(F.col("municipalityCode") > 400, 1).otherwise(2)
+        )
+    
+    # Rename timeObserved to timestamp in production
+    production_df = production_df.withColumnRenamed("timeObserved", "timestamp")
+    
+    # Merge consumption with production
+    merged = consumption_df.join(
+        production_df.select(
+            "timestamp", 
+            "municipalityCode",
+            "windProductionKwh",
+            "sunProductionKwh", 
+            "productionKwh"
+        ),
+        on=["timestamp", "municipalityCode"],
+        how="left"
+    )
+    
+    # Merge with price (price is per dkArea, so same price for all municipalities in area)
+    merged = merged.join(
+        price_df,
+        on=["timestamp", "dkArea"],
+        how="left"
+    )
+    
+    # Fill nulls
+    merged = merged.fillna({
+        'windProductionKwh': 0.0,
+        'sunProductionKwh': 0.0,
+        'productionKwh': 0.0,
+        'price': 0.0
+    })
+    
+    # Rename productionKwh to match output schema (lowercase 'k')
+    merged = merged.withColumnRenamed("productionKwh", "productionkWh")
+    
+    logger.info(f"Merged {merged.count():,} predictions")
+    
+    return merged
 
 
 if __name__ == "__main__":

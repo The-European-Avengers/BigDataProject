@@ -33,8 +33,16 @@ class LocalDataWriter:
         
         Path: data/analytics/<year>-<month>-<day>.csv
         
-        Columns: timestamp, municipalityCode, consumptionkWh, mean_temp, mean_radiation,
-                 mean_wind_speed, productionkWh, price
+        Output Schema:
+        - timestamp: datetime
+        - municipalityCode: int
+        - dkArea: int
+        - consumptionkWh: float
+        - mean_temp: float
+        - mean_radiation: float
+        - mean_wind_speed: float
+        - productionkWh: float (from production calculation)
+        - price: float (EUR/MWh, same for all municipalities in same dkArea)
         
         Args:
             predictions_df: DataFrame with predictions
@@ -46,10 +54,11 @@ class LocalDataWriter:
         
         logger.info(f"Writing predictions to {output_path}")
         
-        # Select columns for output
+        # Select and order columns for output
         output_df = predictions_df.select(
             F.col("timestamp"),
             F.col("municipalityCode"),
+            F.col("dkArea"),
             F.col("consumptionkWh"),
             F.col("mean_temp"),
             F.col("mean_radiation"),
@@ -61,7 +70,15 @@ class LocalDataWriter:
         # Convert to pandas for single CSV file
         output_pd = output_df.toPandas()
         
+        # Sort by timestamp and municipalityCode for readability
+        output_pd = output_pd.sort_values(['timestamp', 'municipalityCode'])
+        
         # Write to CSV
         output_pd.to_csv(output_path, index=False)
         
         logger.info(f"✓ Written {len(output_pd):,} predictions to {output_path}")
+        
+        # Log summary statistics
+        logger.info(f"  Consumption range: {output_pd['consumptionkWh'].min():.2f} - {output_pd['consumptionkWh'].max():.2f} kWh")
+        logger.info(f"  Production range: {output_pd['productionkWh'].min():.2f} - {output_pd['productionkWh'].max():.2f} kWh")
+        logger.info(f"  Price range: {output_pd['price'].min():.2f} - {output_pd['price'].max():.2f} EUR/MWh")

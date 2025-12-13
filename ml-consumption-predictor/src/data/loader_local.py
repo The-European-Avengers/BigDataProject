@@ -28,13 +28,15 @@ class LocalDataLoader:
         logger.info(f"Consumption path: {self.paths.consumption_path}")
         logger.info(f"Weather path: {self.paths.weather_path}")
         logger.info(f"Forecast path: {self.paths.forecast_path}")
+        logger.info(f"Production path: {self.paths.production_path}")
+        logger.info(f"Price path: {self.paths.price_path}")
         logger.info(f"Analytics path: {self.paths.analytics_path}")
     
     def load_historical_consumption(self, years: List[int]) -> DataFrame:
         """
         Load historical consumption data from CSV files
         
-        NEW Schema: datetime, municipalityCode, consumptionKwh, timeDK, municipality, regionName, dkArea
+        Schema: datetime, municipalityCode, consumptionKwh, timeDK, municipality, regionName, dkArea
         
         Args:
             years: List of years to load
@@ -152,6 +154,94 @@ class LocalDataLoader:
         logger.info(f"Loaded {result.count():,} weather records for {parameter}")
         return result
     
+    def load_historical_production(self, years: List[int]) -> DataFrame:
+        """
+        Load historical production data from CSV files
+        
+        Schema: timeObserved, municipalityCode, dkArea, windProductionKwh, sunProductionKwh, productionKwh
+        
+        Args:
+            years: List of years to load
+        
+        Returns:
+            Spark DataFrame with production data
+        """
+        logger.info(f"Loading production data for years: {years}")
+        
+        dfs = []
+        for year in years:
+            path = self.paths.get_production_path(year)
+            
+            if not os.path.exists(path):
+                logger.warning(f"File not found: {path}")
+                continue
+            
+            try:
+                df = self.spark.read.csv(path, header=True, inferSchema=True)
+                
+                # Parse timestamp (handle timezone if present)
+                df = df.withColumn("timeObserved", F.to_timestamp("timeObserved"))
+                
+                dfs.append(df)
+                logger.debug(f"Loaded {path}: {df.count()} records")
+            except Exception as e:
+                logger.warning(f"Error loading {path}: {e}")
+        
+        if not dfs:
+            raise ValueError(f"No production data found for years {years}")
+        
+        # Union all dataframes
+        result = dfs[0]
+        for df in dfs[1:]:
+            result = result.unionByName(df, allowMissingColumns=True)
+        
+        logger.info(f"Loaded {result.count():,} production records")
+        return result
+    
+    def load_historical_price(self, years: List[int]) -> DataFrame:
+        """
+        Load historical price data from CSV files
+        
+        Schema: timestamp, dkArea, price_EUR_MWh
+        
+        Args:
+            years: List of years to load
+        
+        Returns:
+            Spark DataFrame with price data
+        """
+        logger.info(f"Loading price data for years: {years}")
+        
+        dfs = []
+        for year in years:
+            path = self.paths.get_price_path(year)
+            
+            if not os.path.exists(path):
+                logger.warning(f"File not found: {path}")
+                continue
+            
+            try:
+                df = self.spark.read.csv(path, header=True, inferSchema=True)
+                
+                # Parse timestamp (handle timezone)
+                df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
+                
+                dfs.append(df)
+                logger.debug(f"Loaded {path}: {df.count()} records")
+            except Exception as e:
+                logger.warning(f"Error loading {path}: {e}")
+        
+        if not dfs:
+            raise ValueError(f"No price data found for years {years}")
+        
+        # Union all dataframes
+        result = dfs[0]
+        for df in dfs[1:]:
+            result = result.unionByName(df, allowMissingColumns=True)
+        
+        logger.info(f"Loaded {result.count():,} price records")
+        return result
+    
     def load_forecast_weather(
         self, 
         parameter: str,
@@ -245,7 +335,7 @@ class LocalDataLoader:
             prediction_year: The year we're making predictions for
         
         Returns:
-            Dictionary with 'consumption', 'temp', 'sun', 'wind' DataFrames
+            Dictionary with 'consumption', 'temp', 'sun', 'wind', 'production', 'price' DataFrames
         """
         
         # Training years: exclude current year
@@ -264,6 +354,8 @@ class LocalDataLoader:
         consumption_df = self.load_historical_consumption(all_years)
         temp_df = self.load_historical_weather(all_years, 'temperature-2m')
         sun_df = self.load_historical_weather(all_years, 'direct-solar-exposure')
+        production_df = self.load_historical_production(all_years)
+        price_df = self.load_historical_price(all_years)
         
         # Wind is optional
         try:
@@ -293,6 +385,12 @@ class LocalDataLoader:
         sun_df = DataValidator.filter_by_date_range(
             sun_df, 'timestamp', valid_start, valid_end
         )
+        production_df = DataValidator.filter_by_date_range(
+            production_df, 'timeObserved', valid_start, valid_end
+        )
+        price_df = DataValidator.filter_by_date_range(
+            price_df, 'timestamp', valid_start, valid_end
+        )
         
         if wind_df is not None:
             wind_df = DataValidator.filter_by_date_range(
@@ -303,5 +401,7 @@ class LocalDataLoader:
             'consumption': consumption_df,
             'temp': temp_df,
             'sun': sun_df,
-            'wind': wind_df
+            'wind': wind_df,
+            'production': production_df,
+            'price': price_df
         }

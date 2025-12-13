@@ -36,6 +36,8 @@ class LocalPathConfig:
         self.consumption_path = self.csvs_root / "consumption"
         self.weather_path = self.csvs_root / "weather"
         self.forecast_path = self.csvs_root / "forecast"
+        self.production_path = self.csvs_root / "production"
+        self.price_path = self.csvs_root / "price"
         self.analytics_path = self.data_root / "analytics"
         
         # Create directories if they don't exist
@@ -47,6 +49,8 @@ class LocalPathConfig:
             self.consumption_path,
             self.weather_path,
             self.forecast_path,
+            self.production_path,
+            self.price_path,
             self.analytics_path
         ]:
             path.mkdir(parents=True, exist_ok=True)
@@ -74,6 +78,14 @@ class LocalPathConfig:
         }
         param_short = param_map.get(parameter, parameter)
         return str(self.forecast_path / f"{param_short}.csv")
+    
+    def get_production_path(self, year: int) -> str:
+        """Get production file path for a year"""
+        return str(self.production_path / f"{year}.csv")
+    
+    def get_price_path(self, year: int) -> str:
+        """Get price file path for a year"""
+        return str(self.price_path / f"{year}.csv")
     
     def get_analytics_path(self, year: int, month: int, day: int) -> str:
         """Get analytics output path"""
@@ -105,6 +117,20 @@ class K8sPathConfig:
         }
         param_short = param_map.get(parameter, parameter)
         return f"{self.base_path}/historical/{year}/weather-{param_short}/{month:02d}.avro"
+    
+    def get_production_path(self, year: int, month: int) -> str:
+        """
+        Historical production path
+        Format: /historical/<year>/production/<month>.avro/part-*.avro
+        """
+        return f"{self.base_path}/historical/{year}/production/{month:02d}.avro"
+    
+    def get_price_path(self, year: int, month: int) -> str:
+        """
+        Historical price path
+        Format: /historical/<year>/price/<month>.avro/part-*.avro
+        """
+        return f"{self.base_path}/historical/{year}/price/{month:02d}.avro"
     
     def get_live_forecast_path(self, parameter: str) -> str:
         """
@@ -166,6 +192,7 @@ class ModelConfig:
     
     # Feature configuration
     feature_columns: List[str] = None
+    price_feature_columns: List[str] = None
     
     def __post_init__(self):
         """Initialize feature columns"""
@@ -176,6 +203,15 @@ class ModelConfig:
                 'temperature', 'sunlight', 'temp_x_sunlight', 'temp_squared',
                 'is_cold', 'is_dark', 'cold_and_dark',
                 'consumption_same_hour_last_year', 'consumption_same_day_last_year'
+            ]
+        
+        if self.price_feature_columns is None:
+            self.price_feature_columns = [
+                'hour', 'day_of_week', 'month', 'day_of_year',
+                'is_weekend', 'hour_sin', 'hour_cos', 'month_sin', 'month_cos',
+                'total_consumption', 'total_production',
+                'wind_production', 'solar_production',
+                'production_ratio', 'net_demand'
             ]
 
 
