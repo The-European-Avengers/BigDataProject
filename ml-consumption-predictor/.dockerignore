@@ -45,7 +45,7 @@ tests/
 Thumbs.db
 
 # Data (don't include in image)
-data/
+/data/
 *.csv
 *.avro
 *.parquet

@@ -8,7 +8,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 import pandas as pd
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from src.config.settings import settings
 from src.features.engineering import FeatureEngineering
@@ -59,7 +59,8 @@ class EnergyPredictor:
     def predict(
         self,
         temp_forecast: DataFrame,
-        sun_forecast: DataFrame
+        sun_forecast: DataFrame,
+        wind_forecast: Optional[DataFrame] = None  # FIX: Add wind parameter
     ) -> DataFrame:
         """
         Generate predictions for forecast period
@@ -67,6 +68,7 @@ class EnergyPredictor:
         Args:
             temp_forecast: Temperature forecast DataFrame
             sun_forecast: Sunlight forecast DataFrame
+            wind_forecast: Wind speed forecast DataFrame (optional)
         
         Returns:
             Spark DataFrame with predictions including weather features
@@ -91,8 +93,8 @@ class EnergyPredictor:
         ).collect()[0]
         logger.info(f"Sunlight forecast: {sun_dates.min_ts} to {sun_dates.max_ts} ({sun_dates.count} records)")
         
-        # Merge weather forecasts
-        forecast_df = self._merge_forecast_weather(temp_forecast, sun_forecast)
+        # FIX: Merge weather forecasts including wind
+        forecast_df = self._merge_forecast_weather(temp_forecast, sun_forecast, wind_forecast)
         
         # Debug: Check after merge
         merged_dates = forecast_df.select(
@@ -129,7 +131,6 @@ class EnergyPredictor:
         all_predictions = []
         
         for idx, muni_code in enumerate(municipalities, 1):
-            # Fixed: Remove 'end' parameter from logger.info
             try:
                 muni_predictions = self._predict_single_municipality(
                     forecast_with_features, 
@@ -192,9 +193,8 @@ class EnergyPredictor:
             # Check available columns
             available_cols = set(muni_df.columns)
             
-            # We need timeDK for output, plus all feature columns
-            # Don't duplicate columns that are already in feature_columns
-            required_cols_for_output = ["timeDK"]
+            # FIX: Include weather columns for output
+            required_cols_for_output = ["timeDK", "temperature", "sunlight", "wind_speed"]
             required_cols = list(set(required_cols_for_output + self.feature_columns))
             
             missing_cols = set(required_cols) - available_cols
@@ -238,16 +238,19 @@ class EnergyPredictor:
         trend = self.trend_multipliers.get(muni_code, 1.0)
         adjusted_predictions = base_predictions * trend
         
-        # Create results DataFrame
+        # FIX: Use actual weather values from forecast instead of hardcoded 0.0
+        # CRITICAL: Remove microseconds from timestamps to ensure proper joins
+        timestamps = pd.to_datetime(muni_pd['timeDK']).dt.floor('s')
+        
         result_df = pd.DataFrame({
-            'timestamp': muni_pd['timeDK'],
+            'timestamp': timestamps,
             'municipalityCode': muni_pd['municipalityCode'],
             'consumptionkWh': adjusted_predictions,
             'mean_temp': muni_pd['temperature'],
             'mean_radiation': muni_pd['sunlight'],
-            'mean_wind_speed': 0.0,  # Placeholder
-            'productionkWh': 0.0,  # Placeholder
-            'price': 0.0  # Placeholder
+            'mean_wind_speed': muni_pd.get('wind_speed', 0.0),  # Use actual wind or 0.0 if missing
+            'productionkWh': 0.0,  # Placeholder - will be filled by production calculator
+            'price': 0.0  # Placeholder - will be filled by price predictor
         })
         
         return result_df
@@ -255,30 +258,56 @@ class EnergyPredictor:
     def _merge_forecast_weather(
         self,
         temp_df: DataFrame,
-        sun_df: DataFrame
+        sun_df: DataFrame,
+        wind_df: Optional[DataFrame] = None  # FIX: Add wind parameter
     ) -> DataFrame:
-        """Merge temperature and sunlight forecasts"""
+        """Merge temperature, sunlight, and wind forecasts"""
         
         logger.info("Merging forecast weather data...")
         
-        # Aggregate by timestamp and municipality
+        # FIX: First floor timestamps to seconds to remove any milliseconds
+        temp_df = temp_df.withColumn("timestamp", F.date_trunc("second", F.col("timestamp")))
+        sun_df = sun_df.withColumn("timestamp", F.date_trunc("second", F.col("timestamp")))
+        if wind_df is not None:
+            wind_df = wind_df.withColumn("timestamp", F.date_trunc("second", F.col("timestamp")))
+        
+        # Aggregate by timestamp and municipality (take average if multiple readings)
         temp_agg = temp_df.groupBy("timestamp", "municipalityCode") \
             .agg(F.avg("value").alias("temperature"))
         
         sun_agg = sun_df.groupBy("timestamp", "municipalityCode") \
             .agg(F.avg("value").alias("sunlight"))
         
-        # Merge
-        merged = temp_agg.join(
-            sun_agg,
-            on=["timestamp", "municipalityCode"],
-            how="outer"
-        )
+        # FIX: Merge wind if available
+        if wind_df is not None:
+            wind_agg = wind_df.groupBy("timestamp", "municipalityCode") \
+                .agg(F.avg("value").alias("wind_speed"))
+            
+            # Merge all three
+            merged = temp_agg.join(
+                sun_agg,
+                on=["timestamp", "municipalityCode"],
+                how="outer"
+            ).join(
+                wind_agg,
+                on=["timestamp", "municipalityCode"],
+                how="outer"
+            )
+        else:
+            # Merge temp and sun only
+            merged = temp_agg.join(
+                sun_agg,
+                on=["timestamp", "municipalityCode"],
+                how="outer"
+            )
+            # Add wind_speed column with 0.0 if no wind data
+            merged = merged.withColumn("wind_speed", F.lit(0.0))
         
         # Fill missing values
         merged = merged.fillna({
             'temperature': 10.0,
-            'sunlight': 0.0
+            'sunlight': 0.0,
+            'wind_speed': 0.0
         })
         
         return merged

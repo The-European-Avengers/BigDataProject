@@ -226,14 +226,15 @@ def run_spark_job(
         )
         
         # Wind is optional
+        wind_forecast = None
         try:
             wind_forecast = loader.load_forecast_weather(
                 'wind-speed-10m',
                 specific_dates=prediction_dates
             )
+            logger.info("✓ Wind forecast loaded")
         except Exception as e:
             logger.warning(f"Wind forecast not available: {e}")
-            wind_forecast = None
         
         logger.info("✓ Forecast data loaded successfully\n")
         
@@ -248,7 +249,12 @@ def run_spark_job(
             training_data['consumption']
         )
         
-        consumption_predictions = consumption_predictor.predict(temp_forecast, sun_forecast)
+        # Pass wind_forecast to predictor
+        consumption_predictions = consumption_predictor.predict(
+            temp_forecast, 
+            sun_forecast,
+            wind_forecast
+        )
         
         logger.info("✓ Consumption predictions generated successfully\n")
         
@@ -265,6 +271,28 @@ def run_spark_job(
         )
         
         logger.info("✓ Production calculated successfully\n")
+        
+        # DEBUG: Show production data before merge
+        logger.info("DEBUG: Production predictions sample:")
+        production_predictions.select(
+            "timeObserved", "municipalityCode", "dkArea", 
+            "windProductionKwh", "sunProductionKwh", "productionKwh"
+        ).show(5, truncate=False)
+        
+        prod_stats = production_predictions.select(
+            F.count("*").alias("count"),
+            F.countDistinct("municipalityCode").alias("distinct_munis"),
+            F.sum("productionKwh").alias("total_prod"),
+            F.sum("windProductionKwh").alias("total_wind"),
+            F.sum("sunProductionKwh").alias("total_solar")
+        ).collect()[0]
+        
+        logger.info(f"Production stats before merge:")
+        logger.info(f"  Records: {prod_stats['count']:,}")
+        logger.info(f"  Municipalities: {prod_stats['distinct_munis']}")
+        logger.info(f"  Total production: {prod_stats['total_prod']:,.0f} kWh")
+        logger.info(f"  Total wind: {prod_stats['total_wind']:,.0f} kWh")
+        logger.info(f"  Total solar: {prod_stats['total_solar']:,.0f} kWh")
         
         # STEP 7: Generate price predictions
         logger.info("=" * 80)
@@ -344,7 +372,8 @@ def merge_predictions(
     Merge consumption, production, and price predictions
     
     Args:
-        consumption_df: Consumption predictions (timestamp, municipalityCode, consumptionkWh, ...)
+        consumption_df: Consumption predictions (timestamp, municipalityCode, consumptionkWh, 
+                                                mean_temp, mean_radiation, mean_wind_speed)
         production_df: Production calculations (timeObserved, municipalityCode, 
                                                windProductionKwh, sunProductionKwh, productionKwh)
         price_df: Price predictions (timestamp, dkArea, price)
@@ -354,11 +383,29 @@ def merge_predictions(
     """
     logger.info("Merging consumption, production, and price predictions...")
     
-    # Drop placeholder columns from consumption predictions (old code created these with 0.0)
-    if "productionkWh" in consumption_df.columns:
-        consumption_df = consumption_df.drop("productionkWh")
-    if "price" in consumption_df.columns:
-        consumption_df = consumption_df.drop("price")
+    # DEBUG: Check data before merge
+    logger.info("\nDEBUG: Checking data before merge...")
+    
+    cons_count = consumption_df.count()
+    prod_count = production_df.count()
+    price_count = price_df.count()
+    
+    logger.info(f"Consumption records: {cons_count:,}")
+    logger.info(f"Production records: {prod_count:,}")
+    logger.info(f"Price records: {price_count:,}")
+    
+    # Show sample of consumption predictions
+    logger.info("\nConsumption predictions sample (timestamp, municipalityCode):")
+    consumption_df.select("timestamp", "municipalityCode").show(5, truncate=False)
+    
+    # Show sample of production predictions
+    logger.info("\nProduction predictions sample (timeObserved, municipalityCode):")
+    production_df.select("timeObserved", "municipalityCode", "productionKwh").show(5, truncate=False)
+    
+    # Drop old placeholder columns from consumption predictions (if they exist)
+    for col in ["productionkWh", "price"]:
+        if col in consumption_df.columns:
+            consumption_df = consumption_df.drop(col)
     
     # Ensure dkArea in consumption
     if "dkArea" not in consumption_df.columns:
@@ -367,10 +414,40 @@ def merge_predictions(
             F.when(F.col("municipalityCode") > 400, 1).otherwise(2)
         )
     
-    # Rename timeObserved to timestamp in production
+    # Rename timeObserved to timestamp in production for join
     production_df = production_df.withColumnRenamed("timeObserved", "timestamp")
     
+    # DEBUG: Check if timestamps match
+    cons_time_range = consumption_df.select(
+        F.min("timestamp").alias("min_ts"),
+        F.max("timestamp").alias("max_ts")
+    ).collect()[0]
+    
+    prod_time_range = production_df.select(
+        F.min("timestamp").alias("min_ts"),
+        F.max("timestamp").alias("max_ts")
+    ).collect()[0]
+    
+    logger.info(f"\nConsumption time range: {cons_time_range.min_ts} to {cons_time_range.max_ts}")
+    logger.info(f"Production time range: {prod_time_range.min_ts} to {prod_time_range.max_ts}")
+    
+    # Check municipality codes overlap
+    cons_munis = set([row.municipalityCode for row in 
+                      consumption_df.select("municipalityCode").distinct().collect()])
+    prod_munis = set([row.municipalityCode for row in 
+                      production_df.select("municipalityCode").distinct().collect()])
+    
+    overlap_munis = cons_munis.intersection(prod_munis)
+    logger.info(f"\nConsumption municipalities: {len(cons_munis)}")
+    logger.info(f"Production municipalities: {len(prod_munis)}")
+    logger.info(f"Overlapping municipalities: {len(overlap_munis)}")
+    
+    if len(overlap_munis) < len(cons_munis):
+        missing_munis = cons_munis - prod_munis
+        logger.warning(f"Missing production data for {len(missing_munis)} municipalities: {sorted(list(missing_munis))[:10]}")
+    
     # Merge consumption with production
+    logger.info("\nMerging consumption with production...")
     merged = consumption_df.join(
         production_df.select(
             "timestamp", 
@@ -383,7 +460,16 @@ def merge_predictions(
         how="left"
     )
     
+    # Check merge result
+    merge_count = merged.count()
+    non_null_prod = merged.filter(F.col("productionKwh").isNotNull()).count()
+    
+    logger.info(f"Merged records: {merge_count:,}")
+    logger.info(f"Records with production data: {non_null_prod:,}")
+    logger.info(f"Records missing production data: {merge_count - non_null_prod:,}")
+    
     # Merge with price (price is per dkArea, so same price for all municipalities in area)
+    logger.info("\nMerging with price...")
     merged = merged.join(
         price_df,
         on=["timestamp", "dkArea"],
@@ -401,7 +487,23 @@ def merge_predictions(
     # Rename productionKwh to match output schema (lowercase 'k')
     merged = merged.withColumnRenamed("productionKwh", "productionkWh")
     
-    logger.info(f"Merged {merged.count():,} predictions")
+    # FIX: Remove any duplicate rows (keep first occurrence)
+    # This ensures only ONE row per timestamp + municipalityCode
+    logger.info("\nRemoving any duplicate rows...")
+    before_dedup = merged.count()
+    merged = merged.dropDuplicates(["timestamp", "municipalityCode"])
+    after_dedup = merged.count()
+    
+    if before_dedup != after_dedup:
+        logger.warning(f"  Removed {before_dedup - after_dedup:,} duplicate rows")
+    else:
+        logger.info(f"  No duplicates found")
+    
+    # Final stats
+    final_prod_sum = merged.agg(F.sum("productionkWh")).collect()[0][0]
+    logger.info(f"\nFinal merged data:")
+    logger.info(f"  Total records: {merged.count():,}")
+    logger.info(f"  Total production: {final_prod_sum:,.0f} kWh")
     
     return merged
 

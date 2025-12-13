@@ -205,6 +205,12 @@ class PricePredictor:
         X_forecast = area_pd[self.feature_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
         predictions = model.predict(X_forecast.values)
         
+        # FIX: Apply minimum price constraint to prevent negative prices
+        # Electricity prices can theoretically be negative in rare cases (oversupply),
+        # but typically should be >= 0. Adjust this threshold based on your domain knowledge.
+        MIN_PRICE = 0.0  # EUR/MWh - adjust if negative prices are valid in your market
+        predictions = predictions.clip(min=MIN_PRICE)
+        
         # Create results
         result_df = pd.DataFrame({
             'timestamp': area_pd['timestamp'],
@@ -212,7 +218,16 @@ class PricePredictor:
             'price': predictions
         })
         
+        # Log statistics including any originally negative predictions
+        original_predictions = model.predict(X_forecast.values)
+        num_negative = (original_predictions < 0).sum()
+        
+        if num_negative > 0:
+            logger.warning(f"  DK{dk_area}: {num_negative} predictions were negative (clipped to {MIN_PRICE})")
+            logger.warning(f"    Original range: {original_predictions.min():.2f} to {original_predictions.max():.2f}")
+        
         logger.info(f"  DK{dk_area}: {len(result_df):,} predictions, "
-                   f"avg price: {result_df['price'].mean():.2f} EUR/MWh")
+                   f"avg price: {result_df['price'].mean():.2f} EUR/MWh, "
+                   f"range: {result_df['price'].min():.2f} - {result_df['price'].max():.2f}")
         
         return result_df
