@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     procps \
+    zip \
     && rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
@@ -41,6 +42,13 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY --chown=spark:spark src/ ./src/
 
+# CRITICAL FIX: Create a Python package zip for distribution to executors
+RUN cd /opt/spark/work-dir && \
+    zip -r src.zip src/ && \
+    chown spark:spark src.zip
+
+# Set PYTHONPATH to include work directory
+ENV PYTHONPATH="/opt/spark/work-dir:${SPARK_HOME}/python:${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.zip"
 ENV PYTHONUNBUFFERED=1
 ENV DEPLOYMENT_MODE=kubernetes
 ENV DATA_BASE_PATH=hdfs://namenode-g5:9000

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark import StorageLevel
 import logging
 from typing import Dict, Tuple, List, Optional
 
@@ -112,6 +113,14 @@ class ModelTrainer:
         # Prepare training data
         training_df = self._prepare_training_data(training_data)
         
+        # CRITICAL FIX: Persist training data to prevent re-reading files that might be replaced
+        logger.info("Persisting training data to memory to prevent file invalidation issues...")
+        training_df = training_df.persist(StorageLevel.MEMORY_AND_DISK)
+        
+        # Force materialization by counting
+        record_count = training_df.count()
+        logger.info(f"Training data materialized: {record_count:,} records cached in memory")
+        
         # Get list of municipalities
         municipalities = [row.municipalityCode for row in 
                          training_df.select("municipalityCode").distinct().collect()]
@@ -160,8 +169,12 @@ class ModelTrainer:
         logger.info(f"  - Total: {len(self.models)}/{len(municipalities)}")
         logger.info(f"{'='*80}")
         
-        # Calculate trend multipliers (using full dataset)
+        # Calculate trend multipliers (using cached dataset)
         self.trend_multipliers = TrendCalculator.calculate_ytd_trend(training_df)
+        
+        # Unpersist after training is complete
+        logger.info("Unpersisting training data from memory...")
+        training_df.unpersist()
         
         return self.models, self.trend_multipliers
     
@@ -170,7 +183,7 @@ class ModelTrainer:
         Train a global model on all municipalities
         
         Args:
-            training_df: Full training DataFrame with all features
+            training_df: Full training DataFrame with all features (already cached)
         
         Returns:
             Trained XGBoost model
@@ -234,7 +247,7 @@ class ModelTrainer:
         Train model for a single municipality
         
         Args:
-            training_df: Full training DataFrame with all features
+            training_df: Full training DataFrame with all features (already cached)
             muni_code: Municipality code to train
         
         Returns:

@@ -272,28 +272,6 @@ def run_spark_job(
         
         logger.info("✓ Production calculated successfully\n")
         
-        # DEBUG: Show production data before merge
-        logger.info("DEBUG: Production predictions sample:")
-        production_predictions.select(
-            "timeObserved", "municipalityCode", "dkArea", 
-            "windProductionKwh", "sunProductionKwh", "productionKwh"
-        ).show(5, truncate=False)
-        
-        prod_stats = production_predictions.select(
-            F.count("*").alias("count"),
-            F.countDistinct("municipalityCode").alias("distinct_munis"),
-            F.sum("productionKwh").alias("total_prod"),
-            F.sum("windProductionKwh").alias("total_wind"),
-            F.sum("sunProductionKwh").alias("total_solar")
-        ).collect()[0]
-        
-        logger.info(f"Production stats before merge:")
-        logger.info(f"  Records: {prod_stats['count']:,}")
-        logger.info(f"  Municipalities: {prod_stats['distinct_munis']}")
-        logger.info(f"  Total production: {prod_stats['total_prod']:,.0f} kWh")
-        logger.info(f"  Total wind: {prod_stats['total_wind']:,.0f} kWh")
-        logger.info(f"  Total solar: {prod_stats['total_solar']:,.0f} kWh")
-        
         # STEP 7: Generate price predictions
         logger.info("=" * 80)
         logger.info("STEP 7: Generating Price Predictions")
@@ -325,27 +303,33 @@ def run_spark_job(
         
         logger.info("✓ Predictions merged successfully\n")
         
-        # STEP 9: Write predictions for each day
+        # STEP 9: Write predictions
         logger.info("=" * 80)
         logger.info("STEP 9: Writing Predictions")
         logger.info("=" * 80)
         
-        for year, month, day in final_prediction_dates:
-            logger.info(f"Writing predictions for {year}-{month:02d}-{day:02d}...")
-            
-            # Filter predictions for this day
-            day_predictions = final_predictions.filter(
-                (F.year("timestamp") == year) &
-                (F.month("timestamp") == month) &
-                (F.dayofmonth("timestamp") == day)
-            )
-            
-            count = day_predictions.count()
-            if count > 0:
-                writer.write_predictions(day_predictions, year, month, day)
-                logger.info(f"  ✓ Wrote {count:,} predictions")
-            else:
-                logger.warning(f"  ⚠ No predictions found for {year}-{month:02d}-{day:02d}")
+        # FIX: For K8s mode, write all predictions at once
+        if mode == DeploymentMode.KUBERNETES:
+            logger.info("Writing all predictions to HDFS (main + archives)...")
+            writer.write_all_predictions(final_predictions)
+        else:
+            # Local mode: write per day as before
+            for year, month, day in final_prediction_dates:
+                logger.info(f"Writing predictions for {year}-{month:02d}-{day:02d}...")
+                
+                # Filter predictions for this day
+                day_predictions = final_predictions.filter(
+                    (F.year("timestamp") == year) &
+                    (F.month("timestamp") == month) &
+                    (F.dayofmonth("timestamp") == day)
+                )
+                
+                count = day_predictions.count()
+                if count > 0:
+                    writer.write_predictions(day_predictions, year, month, day)
+                    logger.info(f"  ✓ Wrote {count:,} predictions")
+                else:
+                    logger.warning(f"  ⚠ No predictions found for {year}-{month:02d}-{day:02d}")
         
         logger.info("\n✓ All predictions written successfully\n")
         

@@ -14,13 +14,37 @@ spec:
       - name: gitlab-registry
       containers:
       - name: spark-driver
-        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fresh
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fixed
         imagePullPolicy: Always
         command: ["/bin/bash", "-c"]
         args:
         - |
           set -e
-          echo "Starting Spark job..."
+          echo "=== Energy ML Predictor Starting ==="
+          echo "Date: $(date)"
+          echo "Working directory: $(pwd)"
+          
+          # Set PYTHONPATH
+          export PYTHONPATH=/opt/spark/work-dir:$PYTHONPATH
+          echo "PYTHONPATH: $PYTHONPATH"
+          
+          # Verify structure
+          echo ""
+          echo "=== Checking module structure ==="
+          ls -la /opt/spark/work-dir/
+          echo ""
+          ls -la /opt/spark/work-dir/src/
+          
+          # Test Python import
+          echo ""
+          echo "=== Testing Python imports ==="
+          python3 -c "from src.config.settings import settings; print('✓ Import successful!')" || {
+            echo "✗ Import test FAILED"
+            exit 1
+          }
+          
+          echo ""
+          echo "=== Starting Spark Submit ==="
           /opt/spark/bin/spark-submit \
             --master k8s://https://kubernetes.default.svc:443 \
             --deploy-mode client \
@@ -31,14 +55,14 @@ spec:
             --conf spark.driver.memory=3g \
             --conf spark.driver.host=${POD_IP} \
             --conf spark.kubernetes.namespace=bd-bd-gr-05 \
-            --conf spark.kubernetes.container.image=registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fresh \
+            --conf spark.kubernetes.container.image=registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fixed \
             --conf spark.kubernetes.authenticate.driver.serviceAccountName=bd-gr-05-sa \
             --conf spark.sql.execution.arrow.pyspark.enabled=false \
             --conf spark.jars=/opt/spark/jars/spark-avro_2.12-3.5.0.jar \
-            src/main.py \
+            --py-files /opt/spark/work-dir/src.zip \
+            /opt/spark/work-dir/src/main.py \
             --mode kubernetes \
-            --training-years 3 \
-            --days 2024-12-01,2024-12-02,2024-12-03,2024-12-04,2024-12-05,2024-12-06,2024-12-07,2024-12-08,2024-12-09,2024-12-10,2024-12-11,2024-12-12,2024-12-13,2024-12-14,2024-12-15,2024-12-16,2024-12-17,2024-12-18,2024-12-19,2024-12-20,2024-12-21,2024-12-22,2024-12-23,2024-12-24,2024-12-25,2024-12-26,2024-12-27,2024-12-28,2024-12-29,2024-12-30,2024-12-31
+            --training-years 3
         env:
         - name: POD_IP
           valueFrom:
@@ -48,6 +72,8 @@ spec:
           value: "hdfs://namenode-g5:9000"
         - name: DEPLOYMENT_MODE
           value: "kubernetes"
+        - name: PYTHONPATH
+          value: "/opt/spark/work-dir:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip"
         resources:
           requests:
             memory: "4Gi"

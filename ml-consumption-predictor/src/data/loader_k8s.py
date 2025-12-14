@@ -100,8 +100,15 @@ class K8sDataLoader:
                 try:
                     df = self.spark.read.format("avro").load(path)
                     
-                    # Parse timestamp (timeObserved)
-                    df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+                    # FIX: Check which timestamp column exists and use it
+                    if "timeObserved" in df.columns:
+                        df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+                    elif "timestamp" not in df.columns:
+                        logger.warning(f"No timestamp column found in {path}")
+                        continue
+                    else:
+                        # timestamp already exists, ensure it's the right type
+                        df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
                     
                     # Rename value column to standard 'value' for processing
                     if value_col in df.columns:
@@ -241,6 +248,8 @@ class K8sDataLoader:
         Load ALL timestamps from live forecast
         
         Path: /live/forecast/weather-<type>/part-*.avro
+        
+        FIX: Forecast data has 'timestamp' column, not 'timeObserved'
         """
         path = self.paths.get_live_forecast_path(parameter)
         
@@ -258,12 +267,20 @@ class K8sDataLoader:
             # Read all part-*.avro files in directory
             df = self.spark.read.format("avro").load(path)
             
-            # Parse timestamp (timeObserved)
-            df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+            # FIX: Forecast data already has 'timestamp' column, no need to rename
+            # Just ensure it's the right type
+            if "timestamp" in df.columns:
+                df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
+            else:
+                logger.error(f"No timestamp column in forecast data. Available columns: {df.columns}")
+                raise ValueError(f"Forecast data missing timestamp column")
             
             # Rename value column to standard 'value' for processing
             if value_col in df.columns:
                 df = df.withColumn("value", F.col(value_col))
+            elif "value" not in df.columns:
+                logger.error(f"No value column found. Available columns: {df.columns}")
+                raise ValueError(f"Forecast data missing value column")
             
             # Add parameter column if not present
             if "parameter" not in df.columns:
@@ -386,8 +403,14 @@ class K8sDataLoader:
             try:
                 df = self.spark.read.format("avro").load(path)
                 
-                # Parse timestamp
-                df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+                # FIX: Check which timestamp column exists
+                if "timeObserved" in df.columns:
+                    df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+                elif "timestamp" in df.columns:
+                    df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
+                else:
+                    logger.warning(f"No timestamp column in {path}")
+                    continue
                 
                 # Rename value column
                 if value_col in df.columns:
