@@ -300,9 +300,14 @@ def run_spark_job(
         logger.info("=" * 80)
         
         price_predictor = PricePredictor(price_models)
+        
+        # Pass historical prices for constraint calculation
+        historical_prices = training_data.get('price', None)
+        
         price_predictions = price_predictor.predict(
             consumption_predictions,
-            production_predictions
+            production_predictions,
+            historical_prices  # For calculating min/max constraints
         )
         
         logger.info("✓ Price predictions generated successfully\n")

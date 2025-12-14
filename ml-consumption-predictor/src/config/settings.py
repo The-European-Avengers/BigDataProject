@@ -125,12 +125,14 @@ class K8sPathConfig:
         """
         return f"{self.base_path}/historical/{year}/production/{month:02d}.avro"
     
-    def get_price_path(self, year: int, month: int) -> str:
+    def get_price_path(self, year: int) -> str:
         """
-        Historical price path
-        Format: /historical/<year>/price/<month>.avro/part-*.avro
+        Historical price path - SINGLE FILE PER YEAR
+        Format: /historical/<year>/price.avro
+        
+        Note: Unlike other data, price is not split by month
         """
-        return f"{self.base_path}/historical/{year}/price/{month:02d}.avro"
+        return f"{self.base_path}/historical/{year}/price.avro"
     
     def get_live_forecast_path(self, parameter: str) -> str:
         """
@@ -145,34 +147,24 @@ class K8sPathConfig:
         param_short = param_map.get(parameter, parameter)
         return f"{self.base_path}/live/forecast/weather-{param_short}"
     
-    def get_archived_forecast_path(self, parameter: str, year: int, month: int) -> str:
+    def get_analytics_path(self) -> str:
         """
-        Archived forecast path (specific forecast cycles)
-        Format: /historical/<year>/forecast-<type>/<month>/<day-HH-MM>_batch-*_<uuid>/part-*.avro
-        
-        Note: This returns the base path. Individual cycles are in subdirectories.
+        Main analytics output path - SINGLE FILE FOR ALL PREDICTIONS
+        Format: /analytics/predictions.parquet
         """
-        param_map = {
-            'temperature-2m': 'temp',
-            'direct-solar-exposure': 'sun',
-            'wind-speed-10m': 'wind'
-        }
-        param_short = param_map.get(parameter, parameter)
-        return f"{self.base_path}/historical/{year}/forecast-{param_short}/{month:02d}"
+        return f"{self.base_path}/analytics/predictions.parquet"
     
-    def get_analytics_path(self, year: int, month: int, day: int) -> str:
-        """
-        Current analytics output path
-        Format: /analytics/<year>-<month>-<day>.parquet
-        """
-        return f"{self.base_path}/analytics/{year}-{month:02d}-{day:02d}.parquet"
-    
-    def get_archive_analytics_path(self, year: int, month: int, uuid: str) -> str:
+    def get_archive_analytics_path(self, year: int, month: int, timestamp: str) -> str:
         """
         Archived analytics path
-        Format: /historical/archives/<year>/<month>/analytics/<uuid>.parquet
+        Format: /historical/archives/<year>/<month>/analytics/predictions_<timestamp>.parquet
+        
+        Args:
+            year: Year of prediction
+            month: Month of prediction
+            timestamp: Current timestamp (when writing)
         """
-        return f"{self.base_path}/historical/archives/{year}/{month:02d}/analytics/{uuid}.parquet"
+        return f"{self.base_path}/historical/archives/{year}/{month:02d}/analytics/predictions_{timestamp}.parquet"
 
 
 @dataclass

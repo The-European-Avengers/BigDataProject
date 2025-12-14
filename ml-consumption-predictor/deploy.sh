@@ -1,30 +1,30 @@
 #!/bin/bash
+
 set -e
 
-# Energy ML Predictor Spark Job Deployment Script
+# Configuration
+REGISTRY="registry.gitlab.sdu.dk/the-european-avengers/bigdataproject"
+IMAGE_NAME="energy-ml-predictor"
+VERSION="${1:-latest}"
+NAMESPACE="default"
 
-# Colors
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# Configuration
-DOCKER_REGISTRY="${DOCKER_REGISTRY:-your-registry}"
-IMAGE_NAME="${IMAGE_NAME:-energy-ml-predictor}"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
-NAMESPACE="${NAMESPACE:-default}"
-
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}Energy ML Predictor Spark Job Deployment${NC}"
-echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}================================${NC}"
+echo -e "${GREEN}Energy ML Predictor - Deployment${NC}"
+echo -e "${GREEN}================================${NC}"
 echo ""
 
+# Function to print colored messages
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
 
-print_warning() {
+print_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
@@ -32,291 +32,149 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-check_prerequisites() {
-    print_info "Checking prerequisites..."
-    
-    if ! command -v docker &> /dev/null; then
-        print_error "docker not found"
-        exit 1
-    fi
-    
-    if ! command -v kubectl &> /dev/null; then
-        print_error "kubectl not found"
-        exit 1
-    fi
-    
-    print_info "✓ Prerequisites satisfied"
-}
+# Check if kubectl is available
+if ! command -v kubectl &> /dev/null; then
+    print_error "kubectl not found. Please install kubectl."
+    exit 1
+fi
 
-check_spark_operator() {
-    print_info "Checking Spark Operator..."
-    
-    if ! kubectl get crd sparkapplications.sparkoperator.k8s.io &> /dev/null; then
-        print_warning "Spark Operator not found"
-        read -p "Install Spark Operator? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            install_spark_operator
-        else
-            print_error "Spark Operator required for Kubernetes deployment"
-            exit 1
-        fi
-    else
-        print_info "✓ Spark Operator installed"
-    fi
-}
+# Check if docker is available
+if ! command -v docker &> /dev/null; then
+    print_error "docker not found. Please install docker."
+    exit 1
+fi
 
-install_spark_operator() {
-    print_info "Installing Spark Operator..."
-    kubectl apply -f https://github.com/GoogleCloudPlatform/spark-on-k8s-operator/releases/download/v1beta2-1.3.8-3.1.1/spark-operator.yaml
-    
-    print_info "Waiting for Spark Operator to be ready..."
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=spark-operator -n spark-operator --timeout=300s
-    
-    print_info "✓ Spark Operator installed"
-}
-
+# Function to build Docker image
 build_image() {
     print_info "Building Docker image..."
     
-    FULL_IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-    
-    docker build -t "${FULL_IMAGE}" .
+    # Build Docker image (source code is copied via Dockerfile)
+    docker build -t ${REGISTRY}/${IMAGE_NAME}:${VERSION} .
     
     if [ $? -eq 0 ]; then
-        print_info "✓ Image built: ${FULL_IMAGE}"
+        print_info "✓ Docker image built successfully"
     else
-        print_error "Failed to build image"
+        print_error "Failed to build Docker image"
         exit 1
     fi
 }
 
+# Function to push Docker image
 push_image() {
-    print_info "Pushing Docker image..."
+    print_info "Pushing Docker image to registry..."
     
-    FULL_IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-    
-    docker push "${FULL_IMAGE}"
+    docker push ${REGISTRY}/${IMAGE_NAME}:${VERSION}
     
     if [ $? -eq 0 ]; then
-        print_info "✓ Image pushed"
+        print_info "✓ Docker image pushed successfully"
     else
-        print_error "Failed to push image"
+        print_error "Failed to push Docker image"
         exit 1
     fi
 }
 
-create_namespace() {
-    if [ "${NAMESPACE}" != "default" ]; then
-        print_info "Creating namespace ${NAMESPACE}..."
-        kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-    fi
-}
-
+# Function to deploy to Kubernetes
 deploy_k8s() {
     print_info "Deploying to Kubernetes..."
     
-    FULL_IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+    # Apply RBAC and ConfigMap
+    kubectl apply -f k8s/deployment.yaml
     
-    print_info "Creating RBAC..."
-    kubectl apply -f k8s/spark-rbac.yaml -n "${NAMESPACE}"
-    
-    print_info "Creating PersistentVolumeClaim..."
-    kubectl apply -f k8s/persistent-volume.yaml -n "${NAMESPACE}"
-    
-    print_info "Creating ConfigMap..."
-    kubectl apply -f k8s/configmap.yaml -n "${NAMESPACE}"
-    
-    print_info "Creating ScheduledSparkApplication..."
-    cat k8s/cronjob.yaml | \
-        sed "s|your-registry/energy-ml-predictor:latest|${FULL_IMAGE}|g" | \
-        kubectl apply -f - -n "${NAMESPACE}"
-    
-    print_info "✓ Deployment complete"
+    if [ $? -eq 0 ]; then
+        print_info "✓ Kubernetes resources created successfully"
+    else
+        print_error "Failed to deploy to Kubernetes"
+        exit 1
+    fi
 }
 
+# Function to check job status
 check_status() {
-    print_info "Checking deployment status..."
-    echo ""
+    print_info "Checking job status..."
     
-    print_info "ScheduledSparkApplications:"
-    kubectl get scheduledsparkapplications -n "${NAMESPACE}"
+    kubectl get jobs -n ${NAMESPACE} -l app=energy-ml-predictor
     echo ""
-    
-    print_info "Recent SparkApplications:"
-    kubectl get sparkapplications -n "${NAMESPACE}" --sort-by=.metadata.creationTimestamp
-    echo ""
-    
-    print_info "PersistentVolumeClaims:"
-    kubectl get pvc -n "${NAMESPACE}" energy-data-pvc
+    kubectl get pods -n ${NAMESPACE} -l app=energy-ml-predictor
 }
 
-run_manual_job() {
-    print_info "Creating manual Spark job..."
-    
-    FULL_IMAGE="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-    
-    # Check if already exists
-    if kubectl get sparkapplication energy-ml-predictor-manual -n "${NAMESPACE}" &> /dev/null; then
-        print_warning "Manual job already exists. Deleting..."
-        kubectl delete sparkapplication energy-ml-predictor-manual -n "${NAMESPACE}"
-        sleep 2
-    fi
-    
-    cat k8s/job.yaml | \
-        sed "s|your-registry/energy-ml-predictor:latest|${FULL_IMAGE}|g" | \
-        kubectl apply -f - -n "${NAMESPACE}"
-    
-    print_info "✓ Manual job created"
-    
-    print_info "Monitor with: kubectl logs -f energy-ml-predictor-manual-driver -n ${NAMESPACE}"
-}
-
+# Function to view logs
 view_logs() {
-    print_info "Fetching Spark application logs..."
+    print_info "Fetching logs..."
     
-    # Find the latest driver pod
-    DRIVER_POD=$(kubectl get pods -n "${NAMESPACE}" \
-        -l spark-role=driver,app=energy-ml-predictor \
-        --sort-by=.metadata.creationTimestamp \
-        -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null)
+    POD_NAME=$(kubectl get pods -n ${NAMESPACE} -l app=energy-ml-predictor,job=dec2024 -o jsonpath='{.items[0].metadata.name}')
     
-    if [ -z "$DRIVER_POD" ]; then
-        print_error "No driver pod found"
+    if [ -z "$POD_NAME" ]; then
+        print_warn "No pod found for job"
         return
     fi
     
-    print_info "Streaming logs from $DRIVER_POD..."
-    kubectl logs -f "$DRIVER_POD" -n "${NAMESPACE}"
+    kubectl logs -n ${NAMESPACE} -f ${POD_NAME}
 }
 
-run_local_test() {
-    print_info "Running local test..."
+# Function to delete job
+delete_job() {
+    print_info "Deleting job..."
     
-    if [ ! -d "./consumption" ]; then
-        print_error "Local data directories not found"
-        print_info "Expected structure: ./consumption/, ./weather/, ./forecast/"
-        return
+    kubectl delete job energy-ml-predictor-dec2024 -n ${NAMESPACE}
+    
+    if [ $? -eq 0 ]; then
+        print_info "✓ Job deleted successfully"
+    else
+        print_warn "Job may not exist"
     fi
-    
-    python -m src.main --mode local --training-years 2
 }
 
-show_menu() {
-    echo ""
-    echo "What would you like to do?"
-    echo "1) Build Docker image"
-    echo "2) Push Docker image"
-    echo "3) Check Spark Operator"
-    echo "4) Deploy to Kubernetes"
-    echo "5) Full deployment (build + push + deploy)"
-    echo "6) Check deployment status"
-    echo "7) Run manual job"
-    echo "8) View logs"
-    echo "9) Run local test"
-    echo "10) Exit"
-    echo ""
-    read -p "Enter choice [1-10]: " choice
-    
-    case $choice in
-        1)
-            check_prerequisites
-            build_image
-            show_menu
-            ;;
-        2)
-            push_image
-            show_menu
-            ;;
-        3)
-            check_spark_operator
-            show_menu
-            ;;
-        4)
-            check_spark_operator
-            create_namespace
-            deploy_k8s
-            show_menu
-            ;;
-        5)
-            check_prerequisites
-            check_spark_operator
-            build_image
-            push_image
-            create_namespace
-            deploy_k8s
-            check_status
-            show_menu
-            ;;
-        6)
-            check_status
-            show_menu
-            ;;
-        7)
-            run_manual_job
-            show_menu
-            ;;
-        8)
-            view_logs
-            show_menu
-            ;;
-        9)
-            run_local_test
-            show_menu
-            ;;
-        10)
-            print_info "Exiting..."
-            exit 0
-            ;;
-        *)
-            print_error "Invalid choice"
-            show_menu
-            ;;
-    esac
-}
+# Main menu
+case "${2:-all}" in
+    build)
+        build_image
+        ;;
+    push)
+        push_image
+        ;;
+    deploy)
+        deploy_k8s
+        ;;
+    status)
+        check_status
+        ;;
+    logs)
+        view_logs
+        ;;
+    delete)
+        delete_job
+        ;;
+    all)
+        build_image
+        push_image
+        deploy_k8s
+        echo ""
+        print_info "Deployment complete!"
+        print_info "Check status with: $0 ${VERSION} status"
+        print_info "View logs with: $0 ${VERSION} logs"
+        ;;
+    *)
+        echo "Usage: $0 [VERSION] [COMMAND]"
+        echo ""
+        echo "VERSION: Docker image version tag (default: latest)"
+        echo ""
+        echo "COMMANDS:"
+        echo "  build   - Build Docker image only"
+        echo "  push    - Push Docker image to registry"
+        echo "  deploy  - Deploy to Kubernetes"
+        echo "  status  - Check job status"
+        echo "  logs    - View job logs"
+        echo "  delete  - Delete job"
+        echo "  all     - Build, push, and deploy (default)"
+        echo ""
+        echo "Examples:"
+        echo "  $0                    # Build, push, and deploy with 'latest' tag"
+        echo "  $0 v1.0.0 all        # Build, push, and deploy with 'v1.0.0' tag"
+        echo "  $0 latest build      # Only build image"
+        echo "  $0 latest logs       # View logs"
+        exit 1
+        ;;
+esac
 
-# Main
-if [ $# -eq 0 ]; then
-    show_menu
-else
-    case $1 in
-        build)
-            check_prerequisites
-            build_image
-            ;;
-        push)
-            push_image
-            ;;
-        deploy)
-            check_spark_operator
-            create_namespace
-            deploy_k8s
-            ;;
-        all)
-            check_prerequisites
-            check_spark_operator
-            build_image
-            push_image
-            create_namespace
-            deploy_k8s
-            check_status
-            ;;
-        status)
-            check_status
-            ;;
-        manual)
-            run_manual_job
-            ;;
-        logs)
-            view_logs
-            ;;
-        local)
-            run_local_test
-            ;;
-        *)
-            print_error "Unknown command: $1"
-            echo "Usage: $0 [build|push|deploy|all|status|manual|logs|local]"
-            exit 1
-            ;;
-    esac
-fi
+echo ""
+print_info "Done!"

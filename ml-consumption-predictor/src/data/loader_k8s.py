@@ -26,9 +26,6 @@ class K8sDataLoader:
         """
         Load historical consumption data from Avro files
         
-        Schema: consumptionKwh, heatingCategory, housingCategory, municipality,
-                municipalityCode, regionName, timeDK, timeUTC, dkArea
-        
         Path: /historical/<year>/consumption/<month>.avro/part-*.avro
         
         Args:
@@ -49,7 +46,8 @@ class K8sDataLoader:
                     
                     # Parse timestamps
                     df = df.withColumn("timeDK", F.to_timestamp("timeDK"))
-                    df = df.withColumn("timeUTC", F.to_timestamp("timeUTC"))
+                    if "timeUTC" in df.columns:
+                        df = df.withColumn("timeUTC", F.to_timestamp("timeUTC"))
                     
                     dfs.append(df)
                     logger.debug(f"Loaded {path}")
@@ -74,10 +72,6 @@ class K8sDataLoader:
     ) -> DataFrame:
         """
         Load historical weather observations from Avro files
-        
-        Schema for temp: timeObserved, stationId, stationName, mean_temp, lon, lat, dkArea, municipalityCode
-        Schema for sun: timeObserved, stationId, stationName, mean_radiation, lon, lat, dkArea, municipalityCode
-        Schema for wind: timeObserved, stationId, stationName, mean_wind_speed, lon, lat, dkArea, municipalityCode
         
         Path: /historical/<year>/weather-<type>/<month>.avro/part-*.avro
         
@@ -133,6 +127,87 @@ class K8sDataLoader:
         logger.info(f"Loaded {result.count():,} weather records for {parameter}")
         return result
     
+    def load_historical_production(self, years: List[int]) -> DataFrame:
+        """
+        Load historical production data from Avro files
+        
+        Path: /historical/<year>/production/<month>.avro/part-*.avro
+        
+        Args:
+            years: List of years to load
+        
+        Returns:
+            Spark DataFrame with production data
+        """
+        logger.info(f"Loading production data for years: {years}")
+        
+        dfs = []
+        for year in years:
+            for month in range(1, 13):
+                path = self.paths.get_production_path(year, month)
+                
+                try:
+                    df = self.spark.read.format("avro").load(path)
+                    
+                    # Parse timestamp
+                    df = df.withColumn("timeObserved", F.to_timestamp("timeObserved"))
+                    
+                    dfs.append(df)
+                    logger.debug(f"Loaded {path}")
+                except Exception as e:
+                    logger.debug(f"Could not load {path}: {e}")
+        
+        if not dfs:
+            raise ValueError(f"No production data found for years {years}")
+        
+        # Union all dataframes
+        result = dfs[0]
+        for df in dfs[1:]:
+            result = result.unionByName(df, allowMissingColumns=True)
+        
+        logger.info(f"Loaded {result.count():,} production records")
+        return result
+    
+    def load_historical_price(self, years: List[int]) -> DataFrame:
+        """
+        Load historical price data from Avro files
+        
+        Path: /historical/<year>/price.avro (one file per year)
+        
+        Args:
+            years: List of years to load
+        
+        Returns:
+            Spark DataFrame with price data
+        """
+        logger.info(f"Loading price data for years: {years}")
+        
+        dfs = []
+        for year in years:
+            path = self.paths.get_price_path(year)
+            
+            try:
+                df = self.spark.read.format("avro").load(path)
+                
+                # Parse timestamp
+                df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
+                
+                dfs.append(df)
+                logger.debug(f"Loaded {path}")
+            except Exception as e:
+                logger.debug(f"Could not load {path}: {e}")
+        
+        if not dfs:
+            raise ValueError(f"No price data found for years {years}")
+        
+        # Union all dataframes
+        result = dfs[0]
+        for df in dfs[1:]:
+            result = result.unionByName(df, allowMissingColumns=True)
+        
+        logger.info(f"Loaded {result.count():,} price records")
+        return result
+    
     def load_forecast_weather(
         self,
         parameter: str,
@@ -141,13 +216,11 @@ class K8sDataLoader:
         """
         Load forecast weather data with fallback logic
         
-        Schema same as historical weather
-        
         Strategy:
-        1. If no specific dates: Load from /live/forecast/weather-<type>/part-*.avro
+        1. If no specific dates: Load ALL from /live/forecast/weather-<type>/part-*.avro
         2. If specific dates: 
-           a) Try /historical/<year>/forecast-<type>/<month>/<day-HH-MM>_batch-*_<uuid>/part-*.avro
-           b) Fallback to /historical/<year>/weather-<type>/<month>.avro/part-*.avro
+           a) Try loading from /live/forecast/ and filter to dates
+           b) If dates not found, fallback to /historical/<year>/weather-<type>/<month>.avro
         
         Args:
             parameter: Weather parameter
@@ -157,17 +230,15 @@ class K8sDataLoader:
             Spark DataFrame with forecast/weather data
         """
         if specific_dates is None:
-            # No specific dates - load from live forecast
+            # No specific dates - load ALL from live forecast
             return self._load_live_forecast(parameter)
         else:
-            # Specific dates - try archived forecast first, then historical weather
+            # Specific dates - try live forecast first, then historical weather
             return self._load_forecast_for_dates(parameter, specific_dates)
     
     def _load_live_forecast(self, parameter: str) -> DataFrame:
         """
-        Load live forecast from current cycle accumulation
-        
-        Schema same as historical weather
+        Load ALL timestamps from live forecast
         
         Path: /live/forecast/weather-<type>/part-*.avro
         """
@@ -221,177 +292,148 @@ class K8sDataLoader:
         """
         logger.info(f"Loading forecast for {len(specific_dates)} specific dates")
         
+        # First, try to load from live forecast and filter
+        try:
+            live_df = self._load_live_forecast(parameter)
+            
+            # Check which dates are available in live forecast
+            available_dates = live_df.select(
+                F.year("timestamp").alias("year"),
+                F.month("timestamp").alias("month"),
+                F.dayofmonth("timestamp").alias("day")
+            ).distinct().collect()
+            
+            available_set = {(row.year, row.month, row.day) for row in available_dates}
+            requested_set = set(specific_dates)
+            
+            found_in_live = requested_set.intersection(available_set)
+            missing_dates = requested_set - available_set
+            
+            logger.info(f"Found {len(found_in_live)} dates in live forecast")
+            logger.info(f"Missing {len(missing_dates)} dates, will load from historical")
+            
+            # Filter live forecast to requested dates that exist
+            if found_in_live:
+                date_conditions = []
+                for year, month, day in found_in_live:
+                    condition = (
+                        (F.year("timestamp") == year) &
+                        (F.month("timestamp") == month) &
+                        (F.dayofmonth("timestamp") == day)
+                    )
+                    date_conditions.append(condition)
+                
+                combined_condition = date_conditions[0]
+                for condition in date_conditions[1:]:
+                    combined_condition = combined_condition | condition
+                
+                live_filtered = live_df.filter(combined_condition)
+            else:
+                live_filtered = None
+            
+            # Load missing dates from historical weather
+            historical_dfs = []
+            if missing_dates:
+                historical_dfs = self._load_historical_for_dates(parameter, list(missing_dates))
+            
+            # Combine results
+            all_dfs = []
+            if live_filtered is not None and live_filtered.count() > 0:
+                all_dfs.append(live_filtered)
+            all_dfs.extend(historical_dfs)
+            
+            if not all_dfs:
+                raise ValueError(f"No data found for specified dates")
+            
+            result = all_dfs[0]
+            for df in all_dfs[1:]:
+                result = result.unionByName(df, allowMissingColumns=True)
+            
+            logger.info(f"Loaded {result.count():,} total records for {parameter}")
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Could not load from live forecast: {e}")
+            logger.info("Falling back to historical weather entirely")
+            return self._load_historical_for_dates_only(parameter, specific_dates)
+    
+    def _load_historical_for_dates(
+        self,
+        parameter: str,
+        dates: List[Tuple[int, int, int]]
+    ) -> List[DataFrame]:
+        """Load historical weather for specific dates"""
+        
         # Group dates by year and month
         dates_by_year_month = {}
-        for year, month, day in specific_dates:
+        for year, month, day in dates:
             key = (year, month)
             if key not in dates_by_year_month:
                 dates_by_year_month[key] = []
             dates_by_year_month[key].append(day)
         
-        all_dfs = []
+        dfs = []
+        value_column_map = {
+            'temperature-2m': 'mean_temp',
+            'direct-solar-exposure': 'mean_radiation',
+            'wind-speed-10m': 'mean_wind_speed'
+        }
+        value_col = value_column_map.get(parameter, 'value')
         
         for (year, month), days in dates_by_year_month.items():
-            # Try archived forecast first
-            archived_df = self._try_load_archived_forecast(parameter, year, month, days)
+            path = self.paths.get_weather_path(parameter, year, month)
             
-            if archived_df is not None and archived_df.count() > 0:
-                logger.info(f"Using archived forecast for {year}-{month:02d}")
-                all_dfs.append(archived_df)
-            else:
-                # Fallback to historical weather
-                logger.info(f"Archived forecast not found for {year}-{month:02d}, using historical weather")
-                historical_df = self._load_historical_weather_for_month(parameter, year, month, days)
-                if historical_df is not None:
-                    all_dfs.append(historical_df)
+            try:
+                df = self.spark.read.format("avro").load(path)
+                
+                # Parse timestamp
+                df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
+                
+                # Rename value column
+                if value_col in df.columns:
+                    df = df.withColumn("value", F.col(value_col))
+                
+                # Add parameter column
+                if "parameter" not in df.columns:
+                    df = df.withColumn("parameter", F.lit(parameter))
+                
+                # Filter to specific days
+                day_conditions = [F.dayofmonth("timestamp") == day for day in days]
+                combined_condition = day_conditions[0]
+                for condition in day_conditions[1:]:
+                    combined_condition = combined_condition | condition
+                
+                df = df.filter(combined_condition)
+                
+                if df.count() > 0:
+                    dfs.append(df)
+                    logger.info(f"Loaded {df.count()} records from historical {year}-{month:02d}")
+            except Exception as e:
+                logger.warning(f"Could not load historical {path}: {e}")
         
-        if not all_dfs:
-            raise ValueError(f"No forecast or historical weather found for specified dates")
+        return dfs
+    
+    def _load_historical_for_dates_only(
+        self,
+        parameter: str,
+        dates: List[Tuple[int, int, int]]
+    ) -> DataFrame:
+        """Load only from historical weather (no live forecast)"""
         
-        # Union all dataframes
-        result = all_dfs[0]
-        for df in all_dfs[1:]:
+        dfs = self._load_historical_for_dates(parameter, dates)
+        
+        if not dfs:
+            raise ValueError(f"No historical data found for specified dates")
+        
+        result = dfs[0]
+        for df in dfs[1:]:
             result = result.unionByName(df, allowMissingColumns=True)
         
-        logger.info(f"Loaded {result.count():,} forecast/weather records for {parameter}")
         return result
-    
-    def _try_load_archived_forecast(
-        self,
-        parameter: str,
-        year: int,
-        month: int,
-        days: List[int]
-    ) -> Optional[DataFrame]:
-        """
-        Try to load archived forecast batches
-        
-        Path: /historical/<year>/forecast-<type>/<month>/<day-HH-MM>_batch-*_<uuid>/part-*.avro
-        
-        Args:
-            parameter: Weather parameter
-            year: Year
-            month: Month
-            days: List of days
-        
-        Returns:
-            DataFrame if found, None otherwise
-        """
-        base_path = self.paths.get_archived_forecast_path(parameter, year, month)
-        
-        logger.debug(f"Trying archived forecast: {base_path}")
-        
-        # Map parameter to value column
-        value_column_map = {
-            'temperature-2m': 'mean_temp',
-            'direct-solar-exposure': 'mean_radiation',
-            'wind-speed-10m': 'mean_wind_speed'
-        }
-        value_col = value_column_map.get(parameter, 'value')
-        
-        try:
-            # Try to read all subdirectories (batch folders)
-            full_path = f"{base_path}/*"
-            
-            df = self.spark.read.format("avro").load(full_path)
-            
-            # Parse timestamp (timeObserved)
-            df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
-            
-            # Rename value column to standard 'value'
-            if value_col in df.columns:
-                df = df.withColumn("value", F.col(value_col))
-            
-            # Add parameter column if not present
-            if "parameter" not in df.columns:
-                df = df.withColumn("parameter", F.lit(parameter))
-            
-            # Filter to specific days
-            day_conditions = [F.dayofmonth("timestamp") == day for day in days]
-            combined_condition = day_conditions[0]
-            for condition in day_conditions[1:]:
-                combined_condition = combined_condition | condition
-            
-            df = df.filter(combined_condition)
-            
-            if df.count() > 0:
-                logger.info(f"Found {df.count()} records in archived forecast batches")
-                return df
-            else:
-                logger.debug(f"No data found in archived forecast for specified days")
-                return None
-        except Exception as e:
-            logger.debug(f"Archived forecast not found: {e}")
-            return None
-    
-    def _load_historical_weather_for_month(
-        self,
-        parameter: str,
-        year: int,
-        month: int,
-        days: List[int]
-    ) -> Optional[DataFrame]:
-        """
-        Load historical weather observations for specific days in a month
-        
-        Path: /historical/<year>/weather-<type>/<month>.avro/part-*.avro
-        
-        Args:
-            parameter: Weather parameter
-            year: Year
-            month: Month
-            days: List of days
-        
-        Returns:
-            DataFrame if found, None otherwise
-        """
-        path = self.paths.get_weather_path(parameter, year, month)
-        
-        logger.debug(f"Loading historical weather from {path}")
-        
-        # Map parameter to value column
-        value_column_map = {
-            'temperature-2m': 'mean_temp',
-            'direct-solar-exposure': 'mean_radiation',
-            'wind-speed-10m': 'mean_wind_speed'
-        }
-        value_col = value_column_map.get(parameter, 'value')
-        
-        try:
-            df = self.spark.read.format("avro").load(path)
-            
-            # Parse timestamp (timeObserved)
-            df = df.withColumn("timestamp", F.to_timestamp("timeObserved"))
-            
-            # Rename value column to standard 'value'
-            if value_col in df.columns:
-                df = df.withColumn("value", F.col(value_col))
-            
-            # Add parameter column if not present
-            if "parameter" not in df.columns:
-                df = df.withColumn("parameter", F.lit(parameter))
-            
-            # Filter to specific days
-            day_conditions = [F.dayofmonth("timestamp") == day for day in days]
-            combined_condition = day_conditions[0]
-            for condition in day_conditions[1:]:
-                combined_condition = combined_condition | condition
-            
-            df = df.filter(combined_condition)
-            
-            if df.count() > 0:
-                logger.info(f"Loaded {df.count()} records from historical weather")
-                return df
-            else:
-                logger.warning(f"No data found in historical weather for specified days")
-                return None
-        except Exception as e:
-            logger.warning(f"Could not load historical weather: {e}")
-            return None
     
     def get_forecast_dates(self) -> List[Tuple[int, int, int]]:
         """
-        Get list of unique dates from live forecast data
+        Get list of ALL unique dates from live forecast data
         
         Returns:
             List of (year, month, day) tuples
@@ -422,36 +464,37 @@ class K8sDataLoader:
         """
         Load complete training data with validation
         
-        IMPORTANT: Loads historical years EXCLUDING current year for training,
-        then adds current year for trend calculation.
+        IMPORTANT: Loads historical years EXCLUDING prediction year for training,
+        then adds prediction year for trend calculation.
         
-        For example, if current year is 2024 and requested_years=2:
-        - Loads 2022, 2023 for model training
-        - Adds 2024 for year-over-year trend calculation
+        For example, if prediction year is 2025 and requested_years=3:
+        - Loads 2022, 2023, 2024 for model training
+        - Adds 2025 for year-over-year trend calculation
         
         Args:
-            requested_years: Number of historical years to load (excluding current year)
+            requested_years: Number of historical years to load (excluding prediction year)
+            prediction_year: The year we're making predictions for
         
         Returns:
-            Dictionary with 'consumption', 'temp', 'sun', 'wind' DataFrames
+            Dictionary with 'consumption', 'temp', 'sun', 'wind', 'production', 'price' DataFrames
         """
         
-        # Training years: exclude current year
-        # For requested_years=2 in 2024: [2022, 2023]
+        # Training years: exclude prediction year
         training_years = list(range(prediction_year - requested_years, prediction_year))
         
-        # All years including current for trend calculation
-        # For requested_years=2 in 2024: [2022, 2023, 2024]
+        # All years including prediction year for trend calculation
         all_years = list(range(prediction_year - requested_years, prediction_year + 1))
         
         logger.info(f"Attempting to load {requested_years} training years: {training_years}")
-        logger.info(f"Plus current year {prediction_year} for trend calculation")
+        logger.info(f"Plus prediction year {prediction_year} for trend calculation")
         logger.info(f"Total years to load: {all_years}")
         
-        # Load all data (including current year for trends)
+        # Load all data (including prediction year for trends)
         consumption_df = self.load_historical_consumption(all_years)
         temp_df = self.load_historical_weather(all_years, 'temperature-2m')
         sun_df = self.load_historical_weather(all_years, 'direct-solar-exposure')
+        production_df = self.load_historical_production(all_years)
+        price_df = self.load_historical_price(all_years)
         
         # Wind is optional
         try:
@@ -468,7 +511,7 @@ class K8sDataLoader:
         valid_start, valid_end, actual_years = DataValidator.find_valid_date_range(
             consumption_df,
             weather_dfs,
-            requested_years + 1  # +1 because we loaded current year too
+            requested_years + 1  # +1 because we loaded prediction year too
         )
         
         # Filter to valid range
@@ -481,6 +524,12 @@ class K8sDataLoader:
         sun_df = DataValidator.filter_by_date_range(
             sun_df, 'timestamp', valid_start, valid_end
         )
+        production_df = DataValidator.filter_by_date_range(
+            production_df, 'timeObserved', valid_start, valid_end
+        )
+        price_df = DataValidator.filter_by_date_range(
+            price_df, 'timestamp', valid_start, valid_end
+        )
         
         if wind_df is not None:
             wind_df = DataValidator.filter_by_date_range(
@@ -491,5 +540,7 @@ class K8sDataLoader:
             'consumption': consumption_df,
             'temp': temp_df,
             'sun': sun_df,
-            'wind': wind_df
+            'wind': wind_df,
+            'production': production_df,
+            'price': price_df
         }

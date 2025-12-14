@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: energy-ml-predictor
+  namespace: bd-bd-gr-05
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: bd-gr-05-sa
+      restartPolicy: OnFailure
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: spark-driver
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fresh
+        imagePullPolicy: Always
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "Starting Spark job..."
+          /opt/spark/bin/spark-submit \
+            --master k8s://https://kubernetes.default.svc:443 \
+            --deploy-mode client \
+            --name energy-ml-predictor \
+            --conf spark.executor.instances=2 \
+            --conf spark.executor.memory=2g \
+            --conf spark.executor.cores=1 \
+            --conf spark.driver.memory=3g \
+            --conf spark.driver.host=${POD_IP} \
+            --conf spark.kubernetes.namespace=bd-bd-gr-05 \
+            --conf spark.kubernetes.container.image=registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fresh \
+            --conf spark.kubernetes.authenticate.driver.serviceAccountName=bd-gr-05-sa \
+            --conf spark.sql.execution.arrow.pyspark.enabled=false \
+            --conf spark.jars=/opt/spark/jars/spark-avro_2.12-3.5.0.jar \
+            src/main.py \
+            --mode kubernetes \
+            --training-years 3 \
+            --days 2024-12-01,2024-12-02,2024-12-03,2024-12-04,2024-12-05,2024-12-06,2024-12-07,2024-12-08,2024-12-09,2024-12-10,2024-12-11,2024-12-12,2024-12-13,2024-12-14,2024-12-15,2024-12-16,2024-12-17,2024-12-18,2024-12-19,2024-12-20,2024-12-21,2024-12-22,2024-12-23,2024-12-24,2024-12-25,2024-12-26,2024-12-27,2024-12-28,2024-12-29,2024-12-30,2024-12-31
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: DATA_BASE_PATH
+          value: "hdfs://namenode-g5:9000"
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1"
+          limits:
+            memory: "8Gi"
+            cpu: "2"
