@@ -9,7 +9,7 @@ data:
   TOPIC: "weather-wind"
   BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
   SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-  POLL_INTERVAL: "10800"
+  POLL_INTERVAL: "21600"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 ---
 apiVersion: v1
@@ -23,7 +23,7 @@ data:
   TOPIC: "weather-temp"
   BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
   SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-  POLL_INTERVAL: "10800"
+  POLL_INTERVAL: "21600"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 ---
 apiVersion: v1
@@ -37,7 +37,7 @@ data:
   TOPIC: "weather-sun"
   BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
   SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-  POLL_INTERVAL: "10800"
+  POLL_INTERVAL: "21600"
   API_KEY: "9c1728d6-69ec-4be2-8e6c-72dee4dc44df"
 
 ---
@@ -65,11 +65,11 @@ spec:
             name: kafka-producer-wind
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
             memory: "2Gi"
             cpu: "1000m"
+          limits:
+            memory: "6Gi"
+            cpu: "2000m"
       imagePullSecrets:
         - name: gitlab-registry
 ---
@@ -97,11 +97,11 @@ spec:
             name: kafka-producer-temp
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
             memory: "2Gi"
             cpu: "1000m"
+          limits:
+            memory: "6Gi"
+            cpu: "2000m"
       imagePullSecrets:
         - name: gitlab-registry
 ---
@@ -129,10 +129,10 @@ spec:
             name: kafka-producer-sun
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
             memory: "2Gi"
             cpu: "1000m"
+          limits:
+            memory: "6Gi"
+            cpu: "2000m"
       imagePullSecrets:
         - name: gitlab-registry

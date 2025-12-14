@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-historical-consumption-producer
+  namespace: bd-bd-gr-05
+data:
+  TOPIC: "historical-consumption"
+  BOOTSTRAP_SERVERS: "kafka-g5-controller-headless:9092"
+  SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  POLL_INTERVAL: "86400"  # Check daily (24 hours)
+  RUN_ONCE: "false"       # Continuous mode - checks every day
+  FORCE_RUN: "false"      # Set to "true" to force run regardless of date
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-historical-consumption-g5
+  namespace: bd-bd-gr-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-historical-consumption-g5
+  template:
+    metadata:
+      labels:
+        app: kafka-historical-consumption-g5
+    spec:
+      containers:
+      - name: producer
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/historical-consumption-producer:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: kafka-historical-consumption-producer
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      imagePullSecrets:
+        - name: gitlab-registry

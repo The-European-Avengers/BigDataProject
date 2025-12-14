@@ -193,7 +193,7 @@ drwxr-xr-x   - root supergroup          0 ... /raw/price
 | **`/live`** | Contains real-time streaming weather data by topic (temperature, wind speed, solar energy). |
 | **`/analytics`** | Stores processed and aggregated data used for analytics, dashboards, or reporting. |
 
-### Example Folder Tree
+### Folder Tree
 ```text
 # Creating Directory Structure in HDFS
 
@@ -621,7 +621,4 @@ hdfs://namenode-g5:9000/
     └── production_job_state.txt               (last processed timestamp for production job)
 ```
                                    
-![diagram](./assets/HDFS_strucutre_diagram.png)
-```
-
 ![diagram](./assets/HDFS_strucutre_diagram.png)
