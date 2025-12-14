@@ -1,0 +1,83 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: energy-ml-predictor
+  namespace: bd-bd-gr-05
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      serviceAccountName: bd-gr-05-sa
+      restartPolicy: OnFailure
+      imagePullSecrets:
+      - name: gitlab-registry
+      containers:
+      - name: spark-driver
+        image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fixed
+        imagePullPolicy: Always
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -e
+          echo "=== Energy ML Predictor Starting ==="
+          echo "Date: $(date)"
+          echo "Working directory: $(pwd)"
+          
+          # Set PYTHONPATH
+          export PYTHONPATH=/opt/spark/work-dir:$PYTHONPATH
+          echo "PYTHONPATH: $PYTHONPATH"
+          
+          # Verify structure
+          echo ""
+          echo "=== Checking module structure ==="
+          ls -la /opt/spark/work-dir/
+          echo ""
+          ls -la /opt/spark/work-dir/src/
+          
+          # Test Python import
+          echo ""
+          echo "=== Testing Python imports ==="
+          python3 -c "from src.config.settings import settings; print('✓ Import successful!')" || {
+            echo "✗ Import test FAILED"
+            exit 1
+          }
+          
+          echo ""
+          echo "=== Starting Spark Submit ==="
+          /opt/spark/bin/spark-submit \
+            --master k8s://https://kubernetes.default.svc:443 \
+            --deploy-mode client \
+            --name energy-ml-predictor \
+            --conf spark.executor.instances=2 \
+            --conf spark.executor.memory=2g \
+            --conf spark.executor.cores=1 \
+            --conf spark.driver.memory=3g \
+            --conf spark.driver.host=${POD_IP} \
+            --conf spark.kubernetes.namespace=bd-bd-gr-05 \
+            --conf spark.kubernetes.container.image=registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/energy-ml-predictor:dec14-fixed \
+            --conf spark.kubernetes.authenticate.driver.serviceAccountName=bd-gr-05-sa \
+            --conf spark.sql.execution.arrow.pyspark.enabled=false \
+            --conf spark.jars=/opt/spark/jars/spark-avro_2.12-3.5.0.jar \
+            --py-files /opt/spark/work-dir/src.zip \
+            /opt/spark/work-dir/src/main.py \
+            --mode kubernetes \
+            --training-years 3
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: DATA_BASE_PATH
+          value: "hdfs://namenode-g5:9000"
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: PYTHONPATH
+          value: "/opt/spark/work-dir:/opt/spark/python:/opt/spark/python/lib/py4j-0.10.9.7-src.zip"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1"
+          limits:
+            memory: "8Gi"
+            cpu: "2"
