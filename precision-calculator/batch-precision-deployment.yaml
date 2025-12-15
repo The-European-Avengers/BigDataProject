@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-precision-calculation
+  namespace: bd-bd-gr-05
+  labels:
+    app: batch-precision-calculation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batch-precision-calculation
+  template:
+    metadata:
+      labels:
+        app: batch-precision-calculation
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+
+      containers:
+        - name: batch-precision-calculation
+          image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/batch-precision-calculation:fixed
+          imagePullPolicy: Always
+
+          # Override command for logging and debugging
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              echo "============================================================"
+              echo "  BATCH PRECISION CALCULATION - Prediction Precision"
+              echo "============================================================"
+              echo ""
+              echo "Container started successfully!"
+              echo "Environment:"
+              echo "  HDFS_NAMENODE: ${HDFS_NAMENODE}"
+              echo "  SLEEP_INTERVAL: ${SLEEP_INTERVAL_HOURS} hours"
+              echo "  USER: $(whoami)"
+              echo "  WORKING DIR: $(pwd)"
+              echo ""
+              echo "Listing files:"
+              ls -lah /home/sparkuser/
+              echo ""
+              echo "Listing src modules:"
+              ls -lah /home/sparkuser/src/
+              echo ""
+              echo "Checking Python:"
+              python3 --version
+              echo ""
+              echo "Checking Spark:"
+              ls -lah $SPARK_HOME
+              echo ""
+              echo "============================================================"
+              echo "  Starting precision calculation job..."
+              echo "============================================================"
+              echo ""
+              python3 /home/sparkuser/main.py
+
+          env:
+            - name: HDFS_NAMENODE
+              value: "hdfs://namenode-g5:9000"
+            - name: HADOOP_CONF_fs_defaultFS
+              value: "hdfs://namenode-g5:9000"
+            - name: SLEEP_INTERVAL_HOURS
+              value: "6"
+
+          ports:
+            - containerPort: 4040
+              name: spark-ui
+
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: batch-precision-calculation
+  namespace: bd-bd-gr-05
+  labels:
+    app: batch-precision-calculation
+spec:
+  selector:
+    app: batch-precision-calculation
+  ports:
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+  type: ClusterIP

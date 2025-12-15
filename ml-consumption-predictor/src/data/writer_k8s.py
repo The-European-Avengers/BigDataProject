@@ -117,9 +117,9 @@ class K8sDataWriter:
         
         # Step 2: Archive by month
         logger.info(f"\nStep 2: Archiving predictions by month")
-        
+
         current_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         for year, month in year_months:
             logger.info(f"  Archiving {year}-{month:02d}...")
             
@@ -139,14 +139,16 @@ class K8sDataWriter:
             archive_path = f"{self.paths.base_path}/historical/archives/{year}/{month:02d}/analytics/predictions_{current_timestamp}.parquet"
             
             try:
-                month_df.write \
+                # CRITICAL: Use overwrite mode with full path
+                month_df.coalesce(1).write \
                     .mode("overwrite") \
+                    .option("compression", "snappy") \
                     .parquet(archive_path)
                 
                 logger.info(f"    ✓ Archived {month_count:,} predictions to {archive_path}")
                 
             except Exception as e:
-                logger.error(f"    ✗ Failed to archive {year}-{month:02d}: {e}")
+                logger.error(f"    ✗ Failed to archive {year}-{month:02d}: {e}", exc_info=True)
                 # Don't fail the entire job if archive fails
                 logger.warning("    Continuing despite archive failure...")
         
