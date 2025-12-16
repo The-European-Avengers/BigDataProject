@@ -184,7 +184,27 @@ def run_spark_job(
         
         training_data = loader.load_complete_training_data(training_years, final_prediction_dates[0][0])
         
-        logger.info("✓ Training data loaded successfully\n")
+        # CRITICAL: Persist ALL training data to prevent file invalidation
+        logger.info("Persisting all training data to memory...")
+        from pyspark import StorageLevel
+        training_data['consumption'] = training_data['consumption'].persist(StorageLevel.MEMORY_AND_DISK)
+        training_data['temp'] = training_data['temp'].persist(StorageLevel.MEMORY_AND_DISK)
+        training_data['sun'] = training_data['sun'].persist(StorageLevel.MEMORY_AND_DISK)
+        training_data['production'] = training_data['production'].persist(StorageLevel.MEMORY_AND_DISK)
+        training_data['price'] = training_data['price'].persist(StorageLevel.MEMORY_AND_DISK)
+        if training_data['wind'] is not None:
+            training_data['wind'] = training_data['wind'].persist(StorageLevel.MEMORY_AND_DISK)
+        
+        # Force materialization
+        logger.info(f"  Consumption: {training_data['consumption'].count():,} records")
+        logger.info(f"  Temperature: {training_data['temp'].count():,} records")
+        logger.info(f"  Sunlight: {training_data['sun'].count():,} records")
+        logger.info(f"  Production: {training_data['production'].count():,} records")
+        logger.info(f"  Price: {training_data['price'].count():,} records")
+        if training_data['wind'] is not None:
+            logger.info(f"  Wind: {training_data['wind'].count():,} records")
+        
+        logger.info("✓ Training data loaded and cached successfully\n")
         
         # STEP 2: Train consumption model
         logger.info("=" * 80)
@@ -256,7 +276,10 @@ def run_spark_job(
             wind_forecast
         )
         
-        logger.info("✓ Consumption predictions generated successfully\n")
+        # PERSIST predictions since they'll be used multiple times
+        consumption_predictions = consumption_predictions.persist(StorageLevel.MEMORY_AND_DISK)
+        pred_count = consumption_predictions.count()
+        logger.info(f"✓ Generated {pred_count:,} consumption predictions (cached)\n")
         
         # STEP 6: Calculate production from forecast
         logger.info("=" * 80)
@@ -270,7 +293,10 @@ def run_spark_job(
             wind_forecast
         )
         
-        logger.info("✓ Production calculated successfully\n")
+        # PERSIST production predictions since they'll be used multiple times
+        production_predictions = production_predictions.persist(StorageLevel.MEMORY_AND_DISK)
+        prod_count = production_predictions.count()
+        logger.info(f"✓ Generated {prod_count:,} production predictions (cached)\n")
         
         # STEP 7: Generate price predictions
         logger.info("=" * 80)
@@ -308,16 +334,24 @@ def run_spark_job(
         logger.info("STEP 9: Writing Predictions")
         logger.info("=" * 80)
         
-        # FIX: For K8s mode, write all predictions at once
+        # Write to both locations for K8s
         if mode == DeploymentMode.KUBERNETES:
-            logger.info("Writing all predictions to HDFS (main + archives)...")
+            logger.info("Writing predictions to HDFS...")
+            
+            # Ensure dkArea column exists
+            if "dkArea" not in final_predictions.columns:
+                final_predictions = final_predictions.withColumn(
+                    "dkArea",
+                    F.when(F.col("municipalityCode") > 400, 1).otherwise(2)
+                )
+            
+            # Call the write method that writes BOTH locations
             writer.write_all_predictions(final_predictions)
         else:
-            # Local mode: write per day as before
+            # Local mode: write per day
             for year, month, day in final_prediction_dates:
                 logger.info(f"Writing predictions for {year}-{month:02d}-{day:02d}...")
                 
-                # Filter predictions for this day
                 day_predictions = final_predictions.filter(
                     (F.year("timestamp") == year) &
                     (F.month("timestamp") == month) &
@@ -336,6 +370,19 @@ def run_spark_job(
         logger.info("=" * 80)
         logger.info("SPARK JOB COMPLETED SUCCESSFULLY")
         logger.info("=" * 80)
+        
+        # Unpersist all cached data
+        logger.info("Cleaning up cached data...")
+        training_data['consumption'].unpersist()
+        training_data['temp'].unpersist()
+        training_data['sun'].unpersist()
+        training_data['production'].unpersist()
+        training_data['price'].unpersist()
+        if training_data['wind'] is not None:
+            training_data['wind'].unpersist()
+        consumption_predictions.unpersist()
+        production_predictions.unpersist()
+        logger.info("✓ Cache cleared")
         
         return 0
         
