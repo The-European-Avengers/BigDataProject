@@ -1,0 +1,6 @@
+municipalityCode,year,month,minConsumptionPrecision,maxConsumptionPrecision,avgConsumptionPrecision,minPricePrecision,maxPricePrecision,avgPricePrecision
+259,2024,11,55.10,99.95,86.78,0.0,2019.10,77.35
+400,2024,11,66.66,100.0,89.47,0.0,2019.10,77.35
+661,2024,11,57.66,99.96,85.66,0.0,3948.74,80.30
+787,2024,11,54.75,99.99,87.59,0.0,3948.74,80.30
+791,2024,11,56.41,99.92,86.22,0.0,3948.74,80.30
