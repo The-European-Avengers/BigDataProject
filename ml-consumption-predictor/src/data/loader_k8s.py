@@ -5,6 +5,7 @@ Handles HDFS structure with streaming forecast batches
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
+from pyspark import StorageLevel
 from typing import List, Dict, Optional, Tuple
 import logging
 
@@ -49,20 +50,32 @@ class K8sDataLoader:
                     if "timeUTC" in df.columns:
                         df = df.withColumn("timeUTC", F.to_timestamp("timeUTC"))
                     
+                    # CRITICAL: Persist immediately and force materialization
+                    df = df.persist(StorageLevel.MEMORY_AND_DISK)
+                    count = df.count()  # Force materialization right now
+                    logger.debug(f"Loaded and cached {path}: {count:,} records")
+                    
                     dfs.append(df)
-                    logger.debug(f"Loaded {path}")
                 except Exception as e:
                     logger.debug(f"Could not load {path}: {e}")
         
         if not dfs:
             raise ValueError(f"No consumption data found for years {years}")
         
-        # Union all dataframes
+        # Union all dataframes (already cached)
         result = dfs[0]
         for df in dfs[1:]:
             result = result.unionByName(df, allowMissingColumns=True)
         
-        logger.info(f"Loaded {result.count():,} consumption records")
+        # Persist the final union as well
+        result = result.persist(StorageLevel.MEMORY_AND_DISK)
+        total_count = result.count()
+        logger.info(f"Loaded {total_count:,} consumption records (cached)")
+        
+        # Unpersist individual month DataFrames to free memory
+        for df in dfs:
+            df.unpersist()
+        
         return result
     
     def load_historical_weather(
@@ -118,20 +131,32 @@ class K8sDataLoader:
                     if "parameter" not in df.columns:
                         df = df.withColumn("parameter", F.lit(parameter))
                     
+                    # CRITICAL: Persist immediately and force materialization
+                    df = df.persist(StorageLevel.MEMORY_AND_DISK)
+                    count = df.count()  # Force materialization right now
+                    logger.debug(f"Loaded and cached {path}: {count:,} records")
+                    
                     dfs.append(df)
-                    logger.debug(f"Loaded {path}")
                 except Exception as e:
                     logger.debug(f"Could not load {path}: {e}")
         
         if not dfs:
             raise ValueError(f"No weather data found for {parameter}")
         
-        # Union all dataframes
+        # Union all dataframes (already cached)
         result = dfs[0]
         for df in dfs[1:]:
             result = result.unionByName(df, allowMissingColumns=True)
         
-        logger.info(f"Loaded {result.count():,} weather records for {parameter}")
+        # Persist the final union as well
+        result = result.persist(StorageLevel.MEMORY_AND_DISK)
+        total_count = result.count()
+        logger.info(f"Loaded {total_count:,} weather records for {parameter} (cached)")
+        
+        # Unpersist individual month DataFrames to free memory
+        for df in dfs:
+            df.unpersist()
+        
         return result
     
     def load_historical_production(self, years: List[int]) -> DataFrame:
@@ -159,20 +184,32 @@ class K8sDataLoader:
                     # Parse timestamp
                     df = df.withColumn("timeObserved", F.to_timestamp("timeObserved"))
                     
+                    # CRITICAL: Persist immediately and force materialization
+                    df = df.persist(StorageLevel.MEMORY_AND_DISK)
+                    count = df.count()  # Force materialization right now
+                    logger.debug(f"Loaded and cached {path}: {count:,} records")
+                    
                     dfs.append(df)
-                    logger.debug(f"Loaded {path}")
                 except Exception as e:
                     logger.debug(f"Could not load {path}: {e}")
         
         if not dfs:
             raise ValueError(f"No production data found for years {years}")
         
-        # Union all dataframes
+        # Union all dataframes (already cached)
         result = dfs[0]
         for df in dfs[1:]:
             result = result.unionByName(df, allowMissingColumns=True)
         
-        logger.info(f"Loaded {result.count():,} production records")
+        # Persist the final union as well
+        result = result.persist(StorageLevel.MEMORY_AND_DISK)
+        total_count = result.count()
+        logger.info(f"Loaded {total_count:,} production records (cached)")
+        
+        # Unpersist individual month DataFrames to free memory
+        for df in dfs:
+            df.unpersist()
+        
         return result
     
     def load_historical_price(self, years: List[int]) -> DataFrame:
@@ -199,20 +236,32 @@ class K8sDataLoader:
                 # Parse timestamp
                 df = df.withColumn("timestamp", F.to_timestamp("timestamp"))
                 
+                # CRITICAL: Persist immediately and force materialization
+                df = df.persist(StorageLevel.MEMORY_AND_DISK)
+                count = df.count()  # Force materialization right now
+                logger.debug(f"Loaded and cached {path}: {count:,} records")
+                
                 dfs.append(df)
-                logger.debug(f"Loaded {path}")
             except Exception as e:
                 logger.debug(f"Could not load {path}: {e}")
         
         if not dfs:
             raise ValueError(f"No price data found for years {years}")
         
-        # Union all dataframes
+        # Union all dataframes (already cached)
         result = dfs[0]
         for df in dfs[1:]:
             result = result.unionByName(df, allowMissingColumns=True)
         
-        logger.info(f"Loaded {result.count():,} price records")
+        # Persist the final union as well
+        result = result.persist(StorageLevel.MEMORY_AND_DISK)
+        total_count = result.count()
+        logger.info(f"Loaded {total_count:,} price records (cached)")
+        
+        # Unpersist individual year DataFrames to free memory
+        for df in dfs:
+            df.unpersist()
+        
         return result
     
     def load_forecast_weather(
@@ -286,7 +335,11 @@ class K8sDataLoader:
             if "parameter" not in df.columns:
                 df = df.withColumn("parameter", F.lit(parameter))
             
-            logger.info(f"Loaded {df.count():,} live forecast records for {parameter}")
+            # CRITICAL: Persist immediately and force materialization
+            df = df.persist(StorageLevel.MEMORY_AND_DISK)
+            count = df.count()  # Force materialization right now
+            logger.info(f"Loaded {count:,} live forecast records for {parameter} (cached)")
+            
             return df
         except Exception as e:
             logger.error(f"Error loading live forecast from {path}: {e}")
@@ -428,9 +481,15 @@ class K8sDataLoader:
                 
                 df = df.filter(combined_condition)
                 
-                if df.count() > 0:
+                # CRITICAL: Persist immediately and force materialization
+                df = df.persist(StorageLevel.MEMORY_AND_DISK)
+                count = df.count()
+                
+                if count > 0:
                     dfs.append(df)
-                    logger.info(f"Loaded {df.count()} records from historical {year}-{month:02d}")
+                    logger.info(f"Loaded {count} records from historical {year}-{month:02d} (cached)")
+                else:
+                    df.unpersist()
             except Exception as e:
                 logger.warning(f"Could not load historical {path}: {e}")
         
@@ -513,6 +572,7 @@ class K8sDataLoader:
         logger.info(f"Total years to load: {all_years}")
         
         # Load all data (including prediction year for trends)
+        # Each method now persists data immediately during loading
         consumption_df = self.load_historical_consumption(all_years)
         temp_df = self.load_historical_weather(all_years, 'temperature-2m')
         sun_df = self.load_historical_weather(all_years, 'direct-solar-exposure')

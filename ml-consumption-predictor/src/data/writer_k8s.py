@@ -56,7 +56,7 @@ class K8sDataWriter:
         2. Write new /analytics/predictions.parquet with ALL predictions
         3. Archive predictions by month to /historical/archives/<year>/<month>/analytics/predictions_<timestamp>.parquet
         
-        Output columns: timestamp, municipalityCode, consumptionkWh, mean_temp, 
+        Output columns: timestamp, municipalityCode, dkArea, consumptionkWh, mean_temp, 
                        mean_radiation, mean_wind_speed, productionkWh, price
         
         Args:
@@ -66,10 +66,18 @@ class K8sDataWriter:
         logger.info("WRITING PREDICTIONS TO HDFS")
         logger.info("=" * 80)
         
-        # Select columns for output
+        # Ensure dkArea is calculated if not present
+        if "dkArea" not in predictions_df.columns:
+            predictions_df = predictions_df.withColumn(
+                "dkArea",
+                F.when(F.col("municipalityCode") > 400, 1).otherwise(2)
+            )
+        
+        # Select columns for output - NOW INCLUDING dkArea
         output_df = predictions_df.select(
             F.col("timestamp"), 
             F.col("municipalityCode").cast("int"),
+            F.col("dkArea").cast("int"),
             F.col("consumptionkWh").cast("double"),
             F.col("mean_temp").cast("double"),
             F.col("mean_radiation").cast("double"),
@@ -175,10 +183,18 @@ class K8sDataWriter:
         logger.info(f"Archiving to {archive_path}")
         
         try:
-            # Select columns
+            # Ensure dkArea is calculated if not present
+            if "dkArea" not in predictions_df.columns:
+                predictions_df = predictions_df.withColumn(
+                    "dkArea",
+                    F.when(F.col("municipalityCode") > 400, 1).otherwise(2)
+                )
+            
+            # Select columns - NOW INCLUDING dkArea
             output_df = predictions_df.select(
                 F.col("timestamp"), 
                 F.col("municipalityCode").cast("int"),
+                F.col("dkArea").cast("int"),
                 F.col("consumptionkWh").cast("double"),
                 F.col("mean_temp").cast("double"),
                 F.col("mean_radiation").cast("double"),

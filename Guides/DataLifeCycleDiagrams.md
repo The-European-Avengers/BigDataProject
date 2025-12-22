@@ -4,7 +4,7 @@ flowchart LR
 
 %% INGESTION NODES
 API[APIs]
-Python[Python script]
+Python[Fetch scripts]
 Hive[Hive → HDFS]
 KafkaHist[Kafka historical-&60;topic&62;]
 KafkaLive[Kafka live-&60;topic&62;]
@@ -68,7 +68,7 @@ sequenceDiagram
     title Initial Load Data Sequence
 
     participant API as External APIs
-    participant Python as Python Script
+    participant Python as Fetch script
     participant CSV as CSV Files
     participant Hive as Hive Ingestion
     participant Raw as HDFS /raw/
@@ -90,7 +90,7 @@ sequenceDiagram
     title Historical Data Sequence
 
     participant API as External APIs
-    participant Python as Python Script
+    participant Python as Fetch script
     participant Kafka as Kafka (historical-<topic>)
     participant Spark as Spark Streaming Job
     participant Hist as HDFS /historical/<year>/<topic>/
@@ -108,7 +108,7 @@ sequenceDiagram
     title Live Data Sequence
 
     participant API as External APIs
-    participant Python as Python Script
+    participant Python as Fetch script
     participant Kafka as Kafka (live-<topic>)
     participant Stream as Spark Streaming Job
     participant Live as HDFS /live/
