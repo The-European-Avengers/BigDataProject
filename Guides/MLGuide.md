@@ -64,6 +64,18 @@ Input (HDFS)                        Processing                          Output (
    - Features: time patterns + supply/demand balance
    - Historical price constraints to prevent unrealistic predictions
 
+   **Algorithm Selection:** Three regression algorithms were evaluated:
+   - **XGBoost:** Gradient boosting with optimized performance
+   - **Random Forest:** Ensemble of decision trees for robustness
+   - **Gradient Boosting:** Sequential tree building for error reduction
+   
+   The best model is selected using **Mean Absolute Error (MAE)**, which measures the average prediction error in EUR/MWh. MAE was chosen over alternatives because:
+   - **RMSE** (Root Mean Square Error) heavily penalizes large errors, making it sensitive to price spikes
+   - **R²** (coefficient of determination) measures variance explained but not actual error magnitude
+   - **MAPE** (Mean Absolute Percentage Error) fails when prices approach zero (division issues)
+   
+   MAE provides the most interpretable and robust metric for operational evaluation of electricity price predictions.
+
 ### Phase 3: Prediction Generation (5-10 min)
 1. **Loads forecast weather** from `/live/forecast/` (auto-detects available dates)
 2. **Predicts consumption** for each municipality using trained models
