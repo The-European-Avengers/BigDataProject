@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka-historical-consumption-enricher
-  namespace: bd-gr-05 # 🔧 FIXED: Use the standardized namespace
+  namespace: bd-gr-05 
   labels:
     app: kafka-historical-consumption-enricher
 spec:
@@ -31,24 +31,22 @@ spec:
             cpu: "2000m"
         env:
         - name: BOOTSTRAP_SERVERS
-          value: "kafka-g5:9092" # 🔧 UPDATED: Match standardized broker name
+          value: "kafka-g5:9092" 
         - name: SCHEMA_REGISTRY_URL
-          # 🔧 FIXED: Use FQDN for reliable resolution
           value: "http://schema-registry:8081"
         - name: HDFS_NAMENODE
-          value: "hdfs://namenode-g5-ha" # 🔧 FIXED: Use HA Nameservice
+          value: "hdfs://namenode-g5-ha" 
         - name: HADOOP_CONF_fs_defaultFS
           value: "hdfs://namenode-g5-ha"
         - name: CHECKPOINT_ROOT
-          value: "/tmp/spark/checkpoints/historical_consumption_enricher_v14" # Incremented version
+          value: "/tmp/spark/checkpoints/historical_consumption_enricher_v14" 
         - name: TRIGGER_INTERVAL
           value: "1 day"
         - name: MUNICIPALITY_CSV_HDFS
           value: "hdfs://namenode-g5-ha/utils/municipality_codes_to_coordinates.csv"
         - name: HADOOP_CONF_DIR
-          value: "/etc/hadoop/conf" # 🔧 FIXED: Location of mounted XMLs
+          value: "/etc/hadoop/conf" 
         volumeMounts:
-        # 🔧 ADDED: Mount core-site and hdfs-site XMLs from your ConfigMap
         - name: hadoop-xml-volume
           mountPath: "/etc/hadoop/conf/core-site.xml"
           subPath: "core-site.xml"
@@ -56,7 +54,6 @@ spec:
           mountPath: "/etc/hadoop/conf/hdfs-site.xml"
           subPath: "hdfs-site.xml"
       volumes:
-      # 🔧 ADDED: Reference the existing hadoop-xml-config
       - name: hadoop-xml-volume
         configMap:
           name: hadoop-xml-config
@@ -66,7 +63,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kafka-historical-consumption-enricher
-  namespace: bd-gr-05 # 🔧 FIXED
+  namespace: bd-gr-05 
   labels:
     app: kafka-historical-consumption-enricher
 spec:

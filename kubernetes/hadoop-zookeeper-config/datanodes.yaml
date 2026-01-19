@@ -20,7 +20,6 @@ spec:
           env:
             - name: HADOOP_CONF_DIR
               value: /etc/hadoop
-          # Use the XML ConfigMap we created for the NameNodes
           volumeMounts:
             - name: hadoop-datanode-storage
               mountPath: /hadoop/dfs/data

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka-historical-weather-enricher
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05  
   labels:
     app: kafka-historical-weather-enricher
 spec:
@@ -23,45 +23,41 @@ spec:
           image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-historical-weather-enricher:latest
           imagePullPolicy: Always
           env:
-            # Kafka Configuration
             - name: BOOTSTRAP_SERVERS
-              value: "kafka-g5-controller-headless:9092"
+              value: "kafka-g5:9092" 
+
             - name: SCHEMA_REGISTRY_URL
               value: "http://schema-registry:8081"
-            
-            # Checkpoint Configuration
+
             - name: CHECKPOINT_ROOT
-              value: "/tmp/spark/checkpoints/historical_enricher_v5"
+              value: "/tmp/spark/checkpoints/historical_enricher_v17"
             
-            # HDFS Configuration
             - name: HDFS_NAMENODE
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-0.namenode-g5.bd-gr-05.svc.cluster.local:9000"            
+            
             - name: HADOOP_CONF_fs_defaultFS
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-ha"
             
-            # Municipality lookup CSV
             - name: MUNICIPALITY_CSV_HDFS
-              value: "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"
+              value: "hdfs://namenode-g5-ha/utils/municipality_codes_to_coordinates.csv"
             
-            # Trigger interval (how often to check for new data)
+            - name: HADOOP_CONF_DIR
+              value: "/etc/hadoop/conf"
+            
             - name: TRIGGER_INTERVAL
               value: "60 seconds"
             
+          volumeMounts:
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/core-site.xml"
+              subPath: "core-site.xml"
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/hdfs-site.xml"
+              subPath: "hdfs-site.xml"
+              
           ports:
             - containerPort: 4040
               name: spark-ui
-          
-          readinessProbe:
-            exec:
-              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          
-          livenessProbe:
-            exec:
-              command: ["bash", "-c", "pgrep -f 'spark' > /dev/null"]
-            initialDelaySeconds: 90
-            periodSeconds: 20
           
           resources:
             limits:
@@ -70,14 +66,16 @@ spec:
             requests:
               cpu: "500m"
               memory: "1Gi"
+      volumes:
+        - name: hadoop-xml-volume
+          configMap:
+            name: hadoop-xml-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kafka-historical-weather-enricher
-  namespace: bd-bd-gr-05
-  labels:
-    app: kafka-historical-weather-enricher
+  namespace: bd-gr-05 
 spec:
   selector:
     app: kafka-historical-weather-enricher
