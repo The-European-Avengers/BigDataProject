@@ -1,4 +1,3 @@
-# kafka-values.yaml
 image:
   registry: docker.io
   repository: bitnamilegacy/kafka
@@ -9,9 +8,7 @@ kraft:
 
 controller:
   replicaCount: 3
-  
-  # ADD THIS SECTION - Force custom resources
-  resourcesPreset: "none"  # Disable preset
+  resourcesPreset: "none"
   resources:
     requests:
       memory: "4Gi"
@@ -34,9 +31,11 @@ listeners:
     protocol: PLAINTEXT
     containerPort: 9093
 
-advertisedListeners: "CLIENT://kafka-g5-controller-$(POD_NAME).kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9092"
+# Updated FQDN to use bd-gr-05 namespace
+advertisedListeners: "CLIENT://kafka-g5-controller-$(POD_NAME).kafka-g5-controller-headless.bd-gr-05.svc.cluster.local:9092"
 
-controllerQuorumVoters: "0@kafka-g5-controller-0.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,1@kafka-g5-controller-1.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093,2@kafka-g5-controller-2.kafka-g5-controller-headless.bd-bd-gr-05.svc.cluster.local:9093"
+# Updated Quorum Voters to use bd-gr-05 namespace
+controllerQuorumVoters: "0@kafka-g5-controller-0.kafka-g5-controller-headless.bd-gr-05.svc.cluster.local:9093,1@kafka-g5-controller-1.kafka-g5-controller-headless.bd-gr-05.svc.cluster.local:9093,2@kafka-g5-controller-2.kafka-g5-controller-headless.bd-gr-05.svc.cluster.local:9093"
 
 persistence:
   enabled: true

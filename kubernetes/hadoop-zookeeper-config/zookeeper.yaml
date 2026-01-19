@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zookeeper-config-g5
+  namespace: bd-gr-05
+data:
+  zoo.cfg: |
+    tickTime=2000
+    initLimit=10
+    syncLimit=5
+    dataDir=/data
+    clientPort=2181
+    maxClientCnxns=60
+    4lw.commands.whitelist=*
+    server.1=zookeeper-g5-0.zookeeper-g5.bd-gr-05.svc.cluster.local:2888:3888
+    server.2=zookeeper-g5-1.zookeeper-g5.bd-gr-05.svc.cluster.local:2888:3888
+    server.3=zookeeper-g5-2.zookeeper-g5.bd-gr-05.svc.cluster.local:2888:3888
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-g5
+  namespace: bd-gr-05
+spec:
+  clusterIP: None
+  selector:
+    app: zookeeper-g5
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+    - name: follower
+      port: 2888
+      targetPort: 2888
+    - name: election
+      port: 3888
+      targetPort: 3888
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper-g5
+  namespace: bd-gr-05
+spec:
+  podManagementPolicy: Parallel
+  serviceName: "zookeeper-g5"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zookeeper-g5
+  template:
+    metadata:
+      labels:
+        app: zookeeper-g5
+    spec:
+      initContainers:
+        - name: init-myid
+          image: busybox:1.35
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL=${HOSTNAME##*-}
+              MY_ID=$((ORDINAL + 1))
+              echo "Setting myid to $MY_ID"
+              echo $MY_ID > /data/myid
+              cat /data/myid
+          volumeMounts:
+            - name: zookeeper-storage
+              mountPath: /data
+      containers:
+        - name: zookeeper
+          image: zookeeper:3.7.1
+          ports:
+            - containerPort: 2181
+              name: client
+            - containerPort: 2888
+              name: follower
+            - containerPort: 3888
+              name: election
+          volumeMounts:
+            - name: zookeeper-storage
+              mountPath: /data
+            - name: zookeeper-config
+              mountPath: /conf
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "echo ruok | nc localhost 2181 | grep imok"
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: zookeeper-config
+          configMap:
+            name: zookeeper-config-g5
+  volumeClaimTemplates:
+    - metadata:
+        name: zookeeper-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

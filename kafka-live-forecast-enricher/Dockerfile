@@ -48,12 +48,15 @@ WORKDIR /home/sparkuser
 USER sparkuser
 
 # Set environment variables with defaults
-ENV BOOTSTRAP_SERVERS=kafka-g5:9092
+# NOTE: These are fallback defaults. The kubernetes deployment YAML should override these.
+ENV BOOTSTRAP_SERVERS=kafka-g5-controller-headless:9092
 ENV SCHEMA_REGISTRY_URL=http://schema-registry:8081
 ENV CHECKPOINT_ROOT=/tmp/spark/checkpoints/kafka_enricher
 ENV TRIGGER_INTERVAL="30 seconds"
-ENV MUNICIPALITY_CSV_HDFS=hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv
-ENV HDFS_NAMENODE=hdfs://namenode-g5:9000
+
+# 🔧 FIXED: Updated HDFS defaults to use active namenode (namenode-g5-0)
+ENV MUNICIPALITY_CSV_HDFS=hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000/utils/municipality_codes_to_coordinates.csv
+ENV HDFS_NAMENODE=hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000
 
 # Expose Spark UI port
 EXPOSE 4040

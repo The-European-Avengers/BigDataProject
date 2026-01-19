@@ -2,9 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka-enricher
-  namespace: bd-bd-gr-05
-  labels:
-    app: kafka-enricher
+  namespace: bd-gr-05
 spec:
   replicas: 1
   selector:
@@ -17,26 +15,35 @@ spec:
     spec:
       imagePullSecrets:
         - name: gitlab-registry
-
       containers:
         - name: kafka-enricher
           image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/kafka-enricher:latest
           imagePullPolicy: Always
           env:
-            # 🔧 FIX: Use kafka-g5-controller-headless (same as producers)
-            # Alternative: You can also use "kafka-g5:9092" since both exist
             - name: BOOTSTRAP_SERVERS
-              value: "kafka-g5-controller-headless:9092"
+              value: "kafka-g5:9092"
             - name: SCHEMA_REGISTRY_URL
               value: "http://schema-registry:8081"
-            # 🔧 Changed checkpoint path to v3 to start fresh
             - name: CHECKPOINT_ROOT
-              value: "/tmp/spark/checkpoints/kafka_enricher_v11"
-            # 🔧 HDFS Configuration
+              value: "/tmp/spark/checkpoints/kafka_enricher_v12"
+            # HDFS Configuration - Using HA nameservice
             - name: HDFS_NAMENODE
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-ha"
             - name: HADOOP_CONF_fs_defaultFS
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-ha"
+            - name: MUNICIPALITY_CSV_HDFS
+              value: "hdfs://namenode-g5-ha/utils/municipality_codes_to_coordinates.csv"
+            # 🔧 ADDED: Tell Spark where to find the mounted XML files
+            - name: HADOOP_CONF_DIR
+              value: "/etc/hadoop/conf"
+          volumeMounts:
+            # 🔧 ADDED: Mount the core-site and hdfs-site XMLs from your ConfigMap
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/core-site.xml"
+              subPath: "core-site.xml"
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/hdfs-site.xml"
+              subPath: "hdfs-site.xml"
           ports:
             - containerPort: 4040
           readinessProbe:
@@ -56,12 +63,17 @@ spec:
             requests:
               cpu: "500m"
               memory: "1Gi"
+      volumes:
+        # 🔧 ADDED: Define the volume referencing your existing hadoop-xml-config
+        - name: hadoop-xml-volume
+          configMap:
+            name: hadoop-xml-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kafka-enricher
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
   labels:
     app: kafka-enricher
 spec:

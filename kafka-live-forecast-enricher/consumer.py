@@ -252,7 +252,7 @@ def create_stream_for_topic(spark, topic: str, avro_schema_registry_url: str, ch
         raise ValueError(f"Unsupported topic: {topic}")
 
     # HDFS paths
-    hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000").rstrip("/")
+    hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000").rstrip("/")
     live_dir_base = f"{hdfs_namenode}/live/forecast"
     # live_path must be a directory for Spark append mode to work.
     live_path = f"{live_dir_base}/{topic}"
@@ -463,8 +463,8 @@ def main():
     trigger_interval = os.getenv("TRIGGER_INTERVAL", "30 seconds")
     schema_registry_url = os.getenv("SCHEMA_REGISTRY_URL", "http://schema-registry:8081")
     municipality_csv_hdfs = os.getenv("MUNICIPALITY_CSV_HDFS",
-                                      "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv")
-    hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5:9000")
+                                      "hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000/utils/municipality_codes_to_coordinates.csv")
+    hdfs_namenode = os.getenv("HDFS_NAMENODE", "hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000")
 
     schema_registry_client = SchemaRegistryClient({'url': schema_registry_url})
 

@@ -1,6 +1,7 @@
 # enrichers.py
 import pandas as pd
 import numpy as np
+import os
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import IntegerType
 
@@ -9,8 +10,7 @@ bc_municipality_coords = None
 bc_municipality_codes = None
 
 
-def init_municipality_lookup(spark,
-                             csv_path: str = "hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv"):
+def init_municipality_lookup(spark, csv_path: str = None):
     """
     Load municipality CSV from HDFS and broadcast coordinates and codes.
     This must be called once from the driver, after SparkSession is created.
@@ -18,12 +18,20 @@ def init_municipality_lookup(spark,
 
     Args:
         spark: SparkSession instance
-        csv_path: HDFS path to CSV file (default: hdfs://namenode-g5:9000/utils/municipality_codes_to_coordinates.csv)
+        csv_path: HDFS path to CSV file. If None, reads from MUNICIPALITY_CSV_HDFS env var,
+                 or falls back to default path.
 
     Raises:
         Exception: If file cannot be loaded from HDFS
     """
     global bc_municipality_coords, bc_municipality_codes
+
+    # Priority: 1) passed parameter, 2) environment variable, 3) default path
+    if csv_path is None:
+        csv_path = os.getenv(
+            'MUNICIPALITY_CSV_HDFS',
+            'hdfs://namenode-g5-0.namenode-g5-headless.bd-gr-05.svc.cluster.local:9000/utils/municipality_codes_to_coordinates.csv'
+        )
 
     print(f"Loading municipality data from HDFS: {csv_path}")
 
@@ -64,13 +72,13 @@ def init_municipality_lookup(spark,
         print("")
         print("To fix this issue:")
         print("1. Make sure the file exists in HDFS:")
-        print(f"   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -ls /utils/")
+        print(f"   kubectl exec -it namenode-g5-0 -n bd-gr-05 -- hdfs dfs -ls /utils/")
         print("")
         print("2. If the file doesn't exist, upload it:")
-        print("   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -mkdir -p /utils")
-        print("   kubectl cp municipality_codes_to_coordinates.csv bd-bd-gr-05/namenode-g5-0:/tmp/")
+        print("   kubectl exec -it namenode-g5-0 -n bd-gr-05 -- hdfs dfs -mkdir -p /utils")
+        print("   kubectl cp municipality_codes_to_coordinates.csv bd-gr-05/namenode-g5-0:/tmp/")
         print(
-            "   kubectl exec -it namenode-g5-0 -n bd-bd-gr-05 -- hdfs dfs -put /tmp/municipality_codes_to_coordinates.csv /utils/")
+            "   kubectl exec -it namenode-g5-0 -n bd-gr-05 -- hdfs dfs -put /tmp/municipality_codes_to_coordinates.csv /utils/")
         print("=" * 80)
         raise e
 

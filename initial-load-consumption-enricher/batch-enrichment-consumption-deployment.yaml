@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: batch-enrichment-consumption
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
   labels:
     app: batch-enrichment-consumption
 spec:
@@ -92,7 +92,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: batch-enrichment-consumption
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
   labels:
     app: batch-enrichment-consumption
 spec:

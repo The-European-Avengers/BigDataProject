@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: journalnode-g5
+  namespace: bd-gr-05
+spec:
+  clusterIP: None
+  selector:
+    app: journalnode-g5
+  ports:
+    - name: rpc
+      port: 8485
+      targetPort: 8485
+    - name: http
+      port: 8480
+      targetPort: 8480
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: journalnode-g5
+  namespace: bd-gr-05
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+  serviceName: "journalnode-g5"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: journalnode-g5
+  template:
+    metadata:
+      labels:
+        app: journalnode-g5
+    spec:
+      containers:
+        - name: journalnode
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          ports:
+            - containerPort: 8485
+              name: rpc
+            - containerPort: 8480
+              name: http
+          env:
+            - name: CLUSTER_NAME
+              value: "test"
+          envFrom:
+            - configMapRef:
+                name: hadoop-config-g5
+          command:
+            - /bin/bash
+            - -c
+            - |
+              mkdir -p /hadoop/dfs/journal
+              hdfs journalnode
+          volumeMounts:
+            - name: journalnode-storage
+              mountPath: /hadoop/dfs/journal
+  volumeClaimTemplates:
+    - metadata:
+        name: journalnode-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

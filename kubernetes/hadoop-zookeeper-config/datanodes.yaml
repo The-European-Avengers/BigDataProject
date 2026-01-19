@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: datanode-g5
+  namespace: bd-gr-05
+spec:
+  serviceName: "datanode-g5"
+  replicas: 4
+  selector:
+    matchLabels:
+      app: datanode-g5
+  template:
+    metadata:
+      labels:
+        app: datanode-g5
+    spec:
+      containers:
+        - name: datanode
+          image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+          # Use the XML ConfigMap we created for the NameNodes
+          volumeMounts:
+            - name: hadoop-datanode-storage
+              mountPath: /hadoop/dfs/data
+            - name: xml-config
+              mountPath: /etc/hadoop/core-site.xml
+              subPath: core-site.xml
+            - name: xml-config
+              mountPath: /etc/hadoop/hdfs-site.xml
+              subPath: hdfs-site.xml
+      volumes:
+        - name: xml-config
+          configMap:
+            name: hadoop-xml-config
+  volumeClaimTemplates:
+    - metadata:
+        name: hadoop-datanode-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: namenode-g5
+  namespace: bd-gr-05
+spec:
+  serviceName: "namenode-g5"
+  replicas: 2
+  selector:
+    matchLabels:
+      app: namenode-g5
+  template:
+    metadata:
+      labels:
+        app: namenode-g5
+    spec:
+      initContainers:
+        - name: init-hdfs
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+          command:
+            - /bin/bash
+            - -c
+            - |
+              ORDINAL=${HOSTNAME##*-}
+              NN_ID="nn$((ORDINAL + 1))"
+              METADATA_DIR="/hadoop/dfs/name/current"
+              
+              if [ "$ORDINAL" = "0" ]; then
+                if [ ! -d "$METADATA_DIR" ]; then
+                  echo "Formatting NameNode as $NN_ID..."
+                  # Setting both the env var and the -D flag for absolute certainty
+                  export HDFS_CONF_dfs_ha_namenode_id=$NN_ID
+                  hdfs namenode -Ddfs.ha.namenode.id=$NN_ID -format -clusterId test-cluster -force
+                fi
+              else
+                echo "Waiting for NameNode 0..."
+                until printf "" 2>>/dev/null >/dev/tcp/namenode-g5-0.namenode-g5.bd-gr-05.svc.cluster.local/9870; do sleep 5; done
+                if [ ! -d "$METADATA_DIR" ]; then
+                  echo "Bootstrapping NameNode as $NN_ID..."
+                  export HDFS_CONF_dfs_ha_namenode_id=$NN_ID
+                  hdfs namenode -Ddfs.ha.namenode.id=$NN_ID -bootstrapStandby -nonInteractive
+                fi
+              fi
+          volumeMounts:
+            - name: hadoop-namenode-storage
+              mountPath: /hadoop/dfs/name
+            - name: xml-config
+              mountPath: /etc/hadoop/core-site.xml
+              subPath: core-site.xml
+            - name: xml-config
+              mountPath: /etc/hadoop/hdfs-site.xml
+              subPath: hdfs-site.xml
+      containers:
+        - name: namenode
+          image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+          env:
+            - name: HADOOP_CONF_DIR
+              value: /etc/hadoop
+          command:
+            - /bin/bash
+            - -c
+            - |
+              ORDINAL=${HOSTNAME##*-}
+              NN_ID="nn$((ORDINAL + 1))"
+              # Ensure the image entrypoint/scripts don't override the ID
+              export HDFS_CONF_dfs_ha_namenode_id=$NN_ID
+              
+              # Start ZKFC and NameNode
+              hdfs --config /etc/hadoop zkfc -Ddfs.ha.namenode.id=$NN_ID &
+              hdfs --config /etc/hadoop namenode -Ddfs.ha.namenode.id=$NN_ID
+          volumeMounts:
+            - name: hadoop-namenode-storage
+              mountPath: /hadoop/dfs/name
+            - name: xml-config
+              mountPath: /etc/hadoop/core-site.xml
+              subPath: core-site.xml
+            - name: xml-config
+              mountPath: /etc/hadoop/hdfs-site.xml
+              subPath: hdfs-site.xml
+      volumes:
+        - name: xml-config
+          configMap:
+            name: hadoop-xml-config
+  volumeClaimTemplates:
+    - metadata:
+        name: hadoop-namenode-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
