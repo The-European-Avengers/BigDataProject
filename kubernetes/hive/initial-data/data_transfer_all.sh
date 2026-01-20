@@ -8,11 +8,11 @@
 set -e  # Exit on any error
 
 # Configuration
-NAMESPACE="bd-bd-gr-05"
+NAMESPACE="bd-gr-05"
 HIVE_DEPLOYMENT="hive-server"
 HIVE_CONTAINER="hive"
 SHARED_DATA_PATH="/shared-data-for-hive"
-NAMENODE="namenode-g5"
+NAMENODE="namenode-g5-ha"
 
 # Colors for output
 RED='\033[0;31m'
@@ -94,7 +94,7 @@ load_files_to_table() {
 setup_wind_data() {
     local database="dmi_wind"
     local table="wind_raw_data"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-wind"
+    local hdfs_location="hdfs://${NAMENODE}/raw/initial-load/weather-wind"
     
     log_step "Setting up DMI Wind Data..."
     
@@ -132,7 +132,7 @@ setup_wind_data() {
 setup_temp_data() {
     local database="dmi_temp"
     local table="temp_raw_data"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-temp"
+    local hdfs_location="hdfs://${NAMENODE}/raw/initial-load/weather-temp"
     
     log_step "Setting up DMI Temp Data..."
     
@@ -171,7 +171,7 @@ setup_temp_data() {
 setup_sun_data() {
     local database="dmi_sun"
     local table="sun_raw_data"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/weather-sun"
+    local hdfs_location="hdfs://${NAMENODE}/raw/initial-load/weather-sun"
     
     log_step "Setting up DMI Sun Data..."
     
@@ -210,7 +210,7 @@ setup_sun_data() {
 setup_heating_data() {
     local database="energy_heating"
     local table="heating_consumption_raw"
-    local hdfs_location="hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
+    local hdfs_location="hdfs://${NAMENODE}/raw/initial-load/consumption"
     
     log_step "Setting up Heating Consumption Data..."
     
@@ -296,9 +296,9 @@ main() {
     echo ""
     
     # Setup each data type
-    setup_wind_data
-    setup_temp_data
-    setup_sun_data
+    # setup_wind_data
+    # setup_temp_data
+    # setup_sun_data
     setup_heating_data
     
     # Final summary
@@ -319,10 +319,10 @@ main() {
     echo ""
     
     log_info "HDFS locations:"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-wind"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-temp"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/weather-sun"
-    echo "  - hdfs://${NAMENODE}:9000/raw/initial-load/heating-consumption"
+    echo "  - hdfs://${NAMENODE}/raw/initial-load/weather-wind"
+    echo "  - hdfs://${NAMENODE}/raw/initial-load/weather-temp"
+    echo "  - hdfs://${NAMENODE}/raw/initial-load/weather-sun"
+    echo "  - hdfs://${NAMENODE}/raw/initial-load/heating-consumption"
     echo ""
     
     log_info "============================================"
