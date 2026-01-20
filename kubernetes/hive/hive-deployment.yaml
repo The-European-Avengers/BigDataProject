@@ -9,7 +9,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgresql-pvc
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   accessModes:
     - ReadWriteOnce
@@ -19,13 +19,29 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 2️⃣ PostgreSQL Deployment
+# 2️⃣ Shared Data PersistentVolumeClaim (NUEVO - Para CSVs)
+# --------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data-pvc
+  namespace: bd-gr-05
+spec:
+  accessModes:
+    - ReadWriteMany  # Permite acceso desde múltiples contenedores
+  resources:
+    requests:
+      storage: 20Gi
+---
+
+# --------------------------------------------------------
+# 3️⃣ PostgreSQL Deployment
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgresql
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   replicas: 1
   selector:
@@ -77,13 +93,13 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 3️⃣ PostgreSQL Service
+# 4️⃣ PostgreSQL Service
 # --------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
   name: postgresql
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   ports:
     - port: 5432
@@ -94,40 +110,43 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 4️⃣ Hadoop & Hive Config ConfigMap
+# 5️⃣ Hadoop & Hive Config ConfigMap 
 # --------------------------------------------------------
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: hadoop-config
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 data:
   core-site.xml: |
     <?xml version="1.0" encoding="UTF-8"?>
     <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
     <configuration>
-    <property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
-    <property><name>fs.defaultFS</name><value>hdfs://namenode-g5:9000</value></property>
-    <property><name>hadoop.http.staticuser.user</name><value>root</value></property>
-    <property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
-    <property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
+      <property><name>fs.defaultFS</name><value>hdfs://namenode-g5-ha</value></property>
+      <property><name>hadoop.security.authentication</name><value>simple</value></property>
+      <property><name>hadoop.proxyuser.hue.hosts</name><value>*</value></property>
+      <property><name>hadoop.http.staticuser.user</name><value>root</value></property>
+      <property><name>io.compression.codecs</name><value>org.apache.hadoop.io.compress.SnappyCodec</value></property>
+      <property><name>hadoop.proxyuser.hue.groups</name><value>*</value></property>
     </configuration>
 
   hdfs-site.xml: |
     <?xml version="1.0" encoding="UTF-8"?>
     <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
     <configuration>
-    <property><name>dfs.namenode.datanode.registration.ip-hostname-check</name><value>false</value></property>
-    <property><name>dfs.webhdfs.enabled</name><value>true</value></property>
-    <property><name>dfs.permissions</name><value>false</value></property>
-    <property><name>dfs.permissions.enabled</name><value>false</value></property>
-    <property><name>dfs.namenode.name.dir</name><value>file:///hadoop/dfs/name</value></property>
-    <property><name>dfs.namenode.rpc-bind-host</name><value>0.0.0.0</value></property>
-    <property><name>dfs.namenode.servicerpc-bind-host</name><value>0.0.0.0</value></property>
-    <property><name>dfs.namenode.http-bind-host</name><value>0.0.0.0</value></property>
-    <property><name>dfs.namenode.https-bind-host</name><value>0.0.0.0</value></property>
-    <property><name>dfs.client.use.datanode.hostname</name><value>true</value></property>
-    <property><name>dfs.datanode.use.datanode.hostname</name><value>true</value></property>
+      <property><name>dfs.nameservices</name><value>namenode-g5-ha</value></property>
+      <property><name>dfs.ha.namenodes.namenode-g5-ha</name><value>nn1,nn2</value></property>
+      <property><name>dfs.namenode.rpc-address.namenode-g5-ha.nn1</name><value>namenode-g5-0.namenode-g5.bd-gr-05.svc.cluster.local:9000</value></property>
+      <property><name>dfs.namenode.rpc-address.namenode-g5-ha.nn2</name><value>namenode-g5-1.namenode-g5.bd-gr-05.svc.cluster.local:9000</value></property>
+      <property><name>dfs.ha.automatic-failover.enabled</name><value>true</value></property>
+      <property><name>dfs.client.failover.proxy.provider.namenode-g5-ha</name><value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value></property>
+      <property><name>dfs.namenode.datanode.registration.ip-hostname-check</name><value>false</value></property>
+      <property><name>dfs.webhdfs.enabled</name><value>true</value></property>
+      <property><name>dfs.permissions</name><value>false</value></property>
+      <property><name>dfs.permissions.enabled</name><value>false</value></property>
+      <property><name>dfs.client.use.datanode.hostname</name><value>false</value></property>
+      <property><name>dfs.datanode.use.datanode.hostname</name><value>true</value></property>
+      <property><name>dfs.client.datanode-restart.timeout</name><value>30</value></property>
     </configuration>
 
   hive-site.xml: |
@@ -136,6 +155,10 @@ data:
       <property>
         <name>hive.metastore.uris</name>
         <value>thrift://hive-metastore:9083</value>
+      </property>
+      <property>
+        <name>hive.server2.enable.doAs</name>
+        <value>false</value>
       </property>
       <property>
         <name>hive.metastore.warehouse.dir</name>
@@ -161,13 +184,13 @@ data:
 ---
 
 # --------------------------------------------------------
-# 5️⃣ Hive Metastore Deployment
+# 6️⃣ Hive Metastore Deployment
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: hive-metastore
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   replicas: 1
   selector:
@@ -220,13 +243,13 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 6️⃣ Hive Metastore Service
+# 7️⃣ Hive Metastore Service
 # --------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
   name: hive-metastore
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   ports:
     - port: 9083
@@ -237,13 +260,13 @@ spec:
 ---
 
 # --------------------------------------------------------
-# 7️⃣ Hive Server Deployment (CORREGIDO PARA SIDECAR)
+# 8️⃣ Hive Server Deployment (CON PVC PERSISTENTE)
 # --------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: hive-server
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   replicas: 1
   selector:
@@ -258,21 +281,17 @@ spec:
       - name: gitlab-registry
       
       initContainers:
-      # Esperar a que el Metastore esté listo
       - name: wait-for-metastore
         image: busybox:1.35
         command: ['sh', '-c', 'until nc -z hive-metastore 9083; do echo waiting for metastore; sleep 2; done;']
       
-      # 1. Contenedor de Python Collector (Sidecar)
       containers:
+      # 1. Contenedor de Python Collector (Sidecar)
       - name: initial-load
-        # Runs all three data collection scripts via orchestrator
         image: registry.gitlab.sdu.dk/the-european-avengers/bigdataproject/initial-load:latest
-        # No command/args needed - uses Dockerfile's CMD to run run_all_collections.py
         volumeMounts:
-          # Monta el volumen COMPARTIDO en el path que Hive Server esperará
           - name: shared-data-storage
-            mountPath: /shared-data-for-hive # Ruta idéntica a la de Hive
+            mountPath: /shared-data-for-hive
 
       # 2. Contenedor Hive Server (Principal)
       - name: hive
@@ -292,28 +311,27 @@ spec:
         volumeMounts:
           - name: hive-config
             mountPath: /opt/hive/conf
-          # Monta el volumen compartido. Hive puede leer el CSV aquí.
           - name: shared-data-storage
-            mountPath: /shared-data-for-hive # Ruta idéntica a la del Collector
+            mountPath: /shared-data-for-hive
 
-      # 3. Definición de volúmenes
+      # 3. Definición de volúmenes (AHORA CON PVC)
       volumes:
-        # Volumen compartido temporal (EmptyDir)
         - name: shared-data-storage
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: shared-data-pvc  # ¡YA NO ES emptyDir!
         - name: hive-config
           configMap:
             name: hadoop-config
 ---
 
 # --------------------------------------------------------
-# 8️⃣ Hive Server Service
+# 9️⃣ Hive Server Service
 # --------------------------------------------------------
 apiVersion: v1
 kind: Service
 metadata:
   name: hive-server
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05
 spec:
   ports:
     - port: 10000

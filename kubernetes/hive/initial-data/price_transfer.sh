@@ -8,11 +8,11 @@
 set -e  # Exit on any error
 
 # Configuration
-NAMESPACE="bd-bd-gr-05"
+NAMESPACE="bd-gr-05"
 HIVE_DEPLOYMENT="hive-server"
 HIVE_CONTAINER="hive"
 SHARED_DATA_PATH="/shared-data-for-hive"
-NAMENODE="namenode-g5"
+NAMENODE="namenode-g5-ha"
 
 # Colors for output
 RED='\033[0;31m'
