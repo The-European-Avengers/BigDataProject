@@ -2,6 +2,28 @@
 
 This document provides detailed explanations of each code listing in the benchmark appendices.
 
+## Table of Contents
+
+- [Appendix: ksqlDB Benchmark Statements](#appendix-ksqldb-benchmark-statements)
+  - [Statement 1 & 2: CREATE STREAM (Input Streams)](#statement-1--2-create-stream-input-streams)
+  - [Statement 3 & 4: CREATE TABLE (Windowed Aggregations)](#statement-3--4-create-table-windowed-aggregations)
+  - [Statement Difference: Wind vs. Sunshine](#statement-difference-wind-vs-sunshine)
+  - [Complete ksqlDB Flow Example](#complete-ksqldb-flow-example)
+  - [Key ksqlDB vs. Spark Differences](#key-ksqldb-vs-spark-differences)
+  - [Why ksqlDB is Simpler](#why-ksqldb-is-simpler)
+- [Appendix: Spark Streaming Configuration](#appendix-spark-streaming-configuration)
+  - [Listing 1: Spark Session Initialization with Performance Optimizations](#listing-1-spark-session-initialization-with-performance-optimizations)
+  - [Listing 2: Kafka Stream Ingestion with Avro Deserialization](#listing-2-kafka-stream-ingestion-with-avro-deserialization)
+  - [Listing 3: Fixed-Window Aggregation with Timestamp Capture](#listing-3-fixed-window-aggregation-with-timestamp-capture)
+- [Appendix: Producer Configuration](#appendix-producer-configuration)
+  - [Listing 1: Kafka Producer Initialization with Optimizations](#listing-1-kafka-producer-initialization-with-optimizations)
+  - [Listing 2: Message Creation with Producer Timestamp Injection](#listing-2-message-creation-with-producer-timestamp-injection)
+- [Appendix: Latency Monitor Implementation](#appendix-latency-monitor-implementation)
+  - [Listing 1: Timestamp Extraction and Latency Calculation](#listing-1-timestamp-extraction-and-latency-calculation)
+  - [Listing 2: Statistical Metrics Calculation](#listing-2-statistical-metrics-calculation)
+- [Complete Data Flow Example](#complete-data-flow-example)
+- [Key Takeaways](#key-takeaways)
+
 ---
 
 ## Appendix: ksqlDB Benchmark Statements

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: batch-enrichment-price
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05 
   labels:
     app: batch-enrichment-price
 spec:
@@ -37,18 +37,6 @@ spec:
               echo "  USER: $(whoami)"
               echo "  WORKING DIR: $(pwd)"
               echo ""
-              echo "Listing files:"
-              ls -lah /home/sparkuser/
-              echo ""
-              echo "Checking Python:"
-              python3 --version
-              echo ""
-              echo "Checking Spark:"
-              ls -lah $SPARK_HOME
-              echo ""
-              echo "Checking batch_enrichment_price.py:"
-              ls -lah /home/sparkuser/batch_enrichment_price.py
-              echo ""
               echo "============================================================"
               echo "  Running batch enrichment job for price data..."
               echo "============================================================"
@@ -63,10 +51,23 @@ spec:
               sleep 3600
 
           env:
+            # Use HA nameservice address
             - name: HDFS_NAMENODE
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-ha"
             - name: HADOOP_CONF_fs_defaultFS
-              value: "hdfs://namenode-g5:9000"
+              value: "hdfs://namenode-g5-ha"
+            # Tell Spark where to find the mounted XML files
+            - name: HADOOP_CONF_DIR
+              value: "/etc/hadoop/conf"
+
+          volumeMounts:
+            # Mount the HA configuration from your ConfigMap
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/core-site.xml"
+              subPath: "core-site.xml"
+            - name: hadoop-xml-volume
+              mountPath: "/etc/hadoop/conf/hdfs-site.xml"
+              subPath: "hdfs-site.xml"
 
           ports:
             - containerPort: 4040
@@ -79,6 +80,12 @@ spec:
             limits:
               cpu: "4"
               memory: "8Gi"
+      
+      volumes:
+        # Reference your existing hadoop-xml-config
+        - name: hadoop-xml-volume
+          configMap:
+            name: hadoop-xml-config
 
       restartPolicy: Always
 ---
@@ -86,7 +93,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: batch-enrichment-price
-  namespace: bd-bd-gr-05
+  namespace: bd-gr-05 
   labels:
     app: batch-enrichment-price
 spec:
