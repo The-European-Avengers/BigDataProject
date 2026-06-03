@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  hive-api:
+    build: .
+    ports:
+      - "5001:5000"
+    environment:
+      - HIVE_HOST=host.docker.internal  # For Mac/Windows Docker Desktop
+      - HIVE_PORT=10000
+      - HIVE_USERNAME=root
+      - HIVE_DATABASE=analytics
+      - REDIS_HOST=host.docker.internal  # Connect to K8s Redis on host
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - CACHE_TTL=300
+    restart: unless-stopped
+    networks:
+      - hive-network
+
+networks:
+  hive-network:
+    driver: bridge

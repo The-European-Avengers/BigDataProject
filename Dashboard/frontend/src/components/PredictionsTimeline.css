@@ -1,0 +1,883 @@
+/* Professional Energy Price Dashboard Theme */
+
+.predictions-timeline-page {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 20px 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1a202c 50%, #0f2342 100%);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  overflow-y: auto;
+}
+
+.page-header {
+  padding: 16px 24px;
+  background: linear-gradient(
+    135deg,
+    rgba(96, 165, 250, 0.1) 0%,
+    rgba(59, 130, 246, 0.05) 100%
+  );
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #1d4ed8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -1px;
+  margin-bottom: 2px;
+}
+
+.page-header p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+.controls-panel {
+  margin: 0 24px;
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.control-row {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.metric-checkboxes {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checkbox-label:hover {
+  background: rgba(60, 80, 115, 0.3);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #60a5fa;
+  border-radius: 4px;
+}
+
+.checkbox-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: #e2e8f0;
+  transition: all 0.2s;
+}
+
+.checkbox-label:hover .checkbox-text {
+  color: #f1f5f9;
+}
+
+.filter-controls-inline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-select-small {
+  padding: 10px 14px;
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(30, 41, 59, 0.8);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.filter-select-small:hover {
+  border-color: #60a5fa;
+  background: rgba(30, 41, 59, 0.9);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+
+.filter-select-small:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 14px;
+}
+
+.btn-refresh {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(60, 165, 250, 0.3);
+}
+
+.btn-refresh:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(60, 165, 250, 0.4);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading {
+  padding: 60px 20px;
+  text-align: center;
+  color: #60a5fa;
+  font-size: 16px;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.error {
+  padding: 16px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 8px;
+  color: #fca5a5;
+  text-align: center;
+  font-weight: 500;
+  margin: 24px;
+  animation: shake 0.5s ease-out;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* Stats Section */
+.stats-top {
+  margin: 0 24px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.stat-card {
+  background: linear-gradient(
+    135deg,
+    rgba(30, 41, 59, 0.8) 0%,
+    rgba(51, 65, 85, 0.4) 100%
+  );
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.stat-consumption {
+  border-top: 3px solid #60a5fa;
+}
+
+.stat-consumption:hover::before {
+  opacity: 1;
+  color: #60a5fa;
+}
+
+.stat-price {
+  border-top: 3px solid #fbbf24;
+}
+
+.stat-price:hover::before {
+  opacity: 1;
+  color: #fbbf24;
+}
+
+.stat-production {
+  border-top: 3px solid #34d399;
+}
+
+.stat-production:hover::before {
+  opacity: 1;
+  color: #34d399;
+}
+
+.stat-max {
+  border-top: 3px solid #f87171;
+}
+
+.stat-max:hover::before {
+  opacity: 1;
+  color: #f87171;
+}
+
+.stat-card label {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #cbd5e1;
+}
+
+.stat-card value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-card unit {
+  font-size: 11px;
+  opacity: 0.7;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Chart Section Full Width */
+.chart-section-full {
+  margin: 0 16px;
+}
+
+/* Large Chart Container */
+.large-chart-container {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  padding: 16px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Horizontal Precision Section - Under Graph - VERY VISIBLE */
+.precision-section-horizontal {
+  margin: 20px 16px 24px 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.15) 0%,
+    rgba(5, 150, 105, 0.1) 100%
+  );
+  backdrop-filter: blur(20px);
+  border: 3px solid #10b981;
+  border-radius: 16px;
+  padding: 20px 28px;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.precision-header-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 24px;
+  border-right: 2px solid rgba(16, 185, 129, 0.5);
+}
+
+.precision-header-inline .precision-icon {
+  font-size: 28px;
+}
+
+.precision-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #10b981;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.precision-cards-horizontal {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+
+.precision-card-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 2px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  padding: 14px 20px;
+  flex: 1;
+}
+
+.precision-card-horizontal.dk1 {
+  border-left: 5px solid #3b82f6;
+}
+
+.precision-card-horizontal.dk2 {
+  border-left: 5px solid #8b5cf6;
+}
+
+.precision-card-horizontal .dk-area-badge {
+  font-size: 14px;
+  padding: 6px 14px;
+}
+
+.precision-metric-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.precision-metric-inline .metric-icon {
+  font-size: 18px;
+}
+
+.precision-metric-inline .metric-label {
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.precision-metric-inline .metric-value {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.precision-metric-inline .metric-value.consumption {
+  color: #a78bfa;
+}
+
+.precision-metric-inline .metric-value.price {
+  color: #fbbf24;
+}
+
+.large-chart-container h2 {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+/* Charts Section */
+.charts-grid {
+  margin: 0 24px 12px 24px;
+}
+
+.chart-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chart-label {
+  padding: 0;
+}
+
+.chart-label h2 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.chart-label p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.chart-card {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  padding: 28px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chart-card:hover {
+  border-color: rgba(96, 165, 250, 0.3);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+}
+
+.chart-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Recharts Customization */
+.recharts-wrapper {
+  width: 100%;
+}
+
+.recharts-surface {
+  overflow: visible !important;
+}
+
+.recharts-cartesian-axis-tick text {
+  fill: #cbd5e1 !important;
+  font-size: 12px !important;
+}
+
+.recharts-cartesian-axis-line {
+  stroke: rgba(51, 65, 85, 0.5) !important;
+}
+
+.recharts-cartesian-grid-line {
+  stroke: rgba(51, 65, 85, 0.3) !important;
+}
+
+.recharts-default-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(51, 65, 85, 0.5) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.recharts-tooltip-label {
+  color: #e2e8f0 !important;
+  font-weight: 600 !important;
+}
+
+.recharts-tooltip-item {
+  color: #cbd5e1 !important;
+}
+
+.recharts-legend-wrapper {
+  padding-top: 20px !important;
+}
+
+.recharts-legend-item-text {
+  color: #cbd5e1 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chart-card {
+  animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stat-card {
+  animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stat-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.stat-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.stat-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.stat-card:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 24px 16px;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .controls-panel {
+    margin: 0 16px;
+  }
+
+  .control-row {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .metric-checkboxes {
+    gap: 12px;
+    width: 100%;
+  }
+
+  .filter-controls-inline {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-select-small {
+    flex: 1;
+  }
+
+  .stats-top {
+    margin: 0 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 16px;
+  }
+
+  .stat-card value {
+    font-size: 22px;
+  }
+
+  .charts-grid {
+    margin: 0 16px 16px 16px;
+  }
+
+  .chart-card {
+    padding: 16px;
+  }
+
+  .chart-label h2 {
+    font-size: 22px;
+  }
+}
+
+/* Predictions Precision Section */
+.precision-section {
+  width: 260px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 41, 59, 0.8) 0%,
+    rgba(15, 23, 42, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.precision-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.precision-icon {
+  font-size: 18px;
+  background: linear-gradient(
+    135deg,
+    rgba(96, 165, 250, 0.2) 0%,
+    rgba(59, 130, 246, 0.1) 100%
+  );
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.precision-section h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.precision-subtitle {
+  margin: 2px 0 0 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.precision-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.precision-card {
+  background: linear-gradient(
+    145deg,
+    rgba(30, 41, 59, 0.6) 0%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.precision-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.precision-card:hover::before {
+  opacity: 1;
+}
+
+.precision-card.dk1::before {
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.precision-card.dk2::before {
+  background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%);
+}
+
+.precision-card:hover {
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 4px 16px rgba(96, 165, 250, 0.12);
+  transform: translateY(-2px);
+}
+
+.precision-card-header {
+  margin-bottom: 8px;
+}
+
+.dk-area-badge {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.precision-card.dk2 .dk-area-badge {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.precision-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.precision-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 6px;
+  border: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.metric-icon {
+  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 41, 59, 0.8);
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.metric-label {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.metric-value {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.metric-value.consumption {
+  background: linear-gradient(135deg, #8884d8 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.metric-value.price {
+  background: linear-gradient(135deg, #ffc658 0%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.accuracy-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.accuracy-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.accuracy-fill.consumption {
+  background: linear-gradient(90deg, #8884d8 0%, #a78bfa 100%);
+}
+
+.accuracy-fill.price {
+  background: linear-gradient(90deg, #ffc658 0%, #fbbf24 100%);
+}
+
+.precision-loading {
+  text-align: center;
+  color: #94a3b8;
+  padding: 20px;
+  margin: 0 24px;
+}
+
+@media (max-width: 768px) {
+  .precision-section {
+    margin: 0 16px 16px 16px;
+    padding: 20px;
+  }
+
+  .precision-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .precision-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .precision-card {
+    min-width: 100%;
+  }
+}
